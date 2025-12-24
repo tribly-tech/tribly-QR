@@ -143,7 +143,7 @@ export const mockReviews: Review[] = [
   {
     id: "rev-1",
     businessId: "1",
-    rating: "not-expected",
+    rating: "need-improvement",
     feedback: "The service was very slow today. I had to wait for more than 30 minutes for my order. The staff seemed overwhelmed and not attentive to customer needs.",
     category: "staff",
     customerName: "Rajesh Kumar",
@@ -156,7 +156,7 @@ export const mockReviews: Review[] = [
   {
     id: "rev-2",
     businessId: "1",
-    rating: "not-expected",
+    rating: "need-improvement",
     feedback: "The coffee quality has declined recently. It doesn't taste as good as it used to. Also, the prices have increased significantly.",
     category: "product",
     customerName: "Priya Sharma",
@@ -169,7 +169,7 @@ export const mockReviews: Review[] = [
   {
     id: "rev-3",
     businessId: "2",
-    rating: "not-expected",
+    rating: "need-improvement",
     feedback: "The gym equipment is outdated and some machines are not working properly. The locker room cleanliness needs improvement.",
     category: "product",
     customerName: "Amit Patel",
@@ -182,7 +182,7 @@ export const mockReviews: Review[] = [
   {
     id: "rev-4",
     businessId: "3",
-    rating: "not-expected",
+    rating: "need-improvement",
     feedback: "I had a bad experience with the hair treatment. The stylist didn't listen to my requirements and the result was not what I expected.",
     category: "staff",
     customerName: "Sneha Reddy",
@@ -195,7 +195,7 @@ export const mockReviews: Review[] = [
   {
     id: "rev-5",
     businessId: "5",
-    rating: "not-expected",
+    rating: "need-improvement",
     feedback: "The food took too long to arrive and when it did, it was cold. The waiter was not helpful when we complained about it.",
     category: "customer-experience",
     customerName: "Vikram Singh",
@@ -208,7 +208,7 @@ export const mockReviews: Review[] = [
   {
     id: "rev-6",
     businessId: "1",
-    rating: "not-expected",
+    rating: "need-improvement",
     feedback: "The WiFi connection was very poor and the seating area was too crowded. Couldn't work peacefully.",
     category: "customer-experience",
     customerName: "Anjali Mehta",
@@ -221,7 +221,7 @@ export const mockReviews: Review[] = [
 ];
 
 export const getReviewsByBusinessId = (businessId: string): Review[] => {
-  return mockReviews.filter((review) => review.businessId === businessId && review.rating === "not-expected");
+  return mockReviews.filter((review) => review.businessId === businessId && review.rating === "need-improvement");
 };
 
 // Function to add a new business (used when onboarding)

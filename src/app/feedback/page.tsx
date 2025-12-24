@@ -91,6 +91,30 @@ const getFeedbackSuggestions = (rating: number): FeedbackItem[] => {
       text: "The promotional offers are fantastic! Great savings without compromising on quality, which is exactly what I was looking for. The discounts were substantial and the terms were fair and transparent. I felt like I got excellent value for my money, and the offers made the purchase even more appealing.",
       rating: 5,
     },
+    {
+      id: "13",
+      category: "product",
+      text: "The product is okay, nothing exceptional but it serves its purpose. The quality is decent for the price point. It meets basic expectations without exceeding them. There are some minor areas that could be improved, but overall it's acceptable.",
+      rating: 3,
+    },
+    {
+      id: "14",
+      category: "staff",
+      text: "The staff was adequate and handled my request without issues. Service was standard and they were polite. Nothing particularly memorable, but they did their job competently. The interaction was brief and straightforward.",
+      rating: 3,
+    },
+    {
+      id: "15",
+      category: "customer-experience",
+      text: "The experience was average overall. Everything worked as expected, but nothing stood out as exceptional. The process was functional and I got what I needed. It was a standard experience without any major issues or highlights.",
+      rating: 3,
+    },
+    {
+      id: "16",
+      category: "offers-discounts",
+      text: "The offers were reasonable but not particularly exciting. The discounts were modest and the terms were standard. It provided some value, though not as much as I had hoped. The pricing was fair for what was offered.",
+      rating: 3,
+    },
   ];
 
   // Filter feedbacks based on rating
@@ -101,7 +125,7 @@ export default function FeedbackPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const ratingParam = searchParams.get("rating");
-  const rating = ratingParam === "excellent" ? 5 : ratingParam === "good" ? 4 : null;
+  const rating = ratingParam === "excellent" ? 5 : ratingParam === "good" ? 4 : ratingParam === "average" ? 3 : null;
 
   const [selectedFilter, setSelectedFilter] = useState<FilterType | null>(null);
   const [showToast, setShowToast] = useState(false);
@@ -182,9 +206,28 @@ export default function FeedbackPage() {
             AI Recommended Feedbacks
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Based on your {rating === 5 ? "Excellent" : "Good"} rating
+            Based on your {rating === 5 ? "Excellent" : rating === 4 ? "Good" : "Average"} rating
           </p>
         </div>
+
+        {/* Manual feedback option */}
+        {allFeedbacks.length > 0 && (
+          <div className="py-4 space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Select any feedback below to use it, or customize it to match your experience.
+            </p>
+            <Button
+              variant="link"
+              onClick={() => {
+                const codeParam = searchParams.get("code");
+                router.push(`/manual-feedback?rating=${ratingParam}${codeParam ? `&code=${codeParam}` : ""}`);
+              }}
+              className="text-[#9747FF] hover:text-[#9747FF]/80 underline p-0 h-auto"
+            >
+              Or write your own feedback instead
+            </Button>
+          </div>
+        )}
 
         {/* Filters */}
         <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0 scrollbar-hide">
@@ -238,14 +281,6 @@ export default function FeedbackPage() {
           )}
         </div>
 
-        {/* Empty state message */}
-        {filteredFeedbacks.length > 0 && (
-          <div className="text-center py-4">
-            <p className="text-sm text-muted-foreground">
-              Select any feedback above to use it, or customize it to match your experience.
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Toast Notification */}

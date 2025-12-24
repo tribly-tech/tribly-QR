@@ -1292,13 +1292,13 @@ export default function BusinessDetailPage() {
                         </p>
                       </div>
                       <div className="space-y-2">
-                        <Label>Not Expected Rating Response</Label>
+                        <Label>Need Improvement Rating Response</Label>
                         <Textarea
                           placeholder="We're sorry to hear about your experience. We'd like to make things right. Please contact us at..."
                           className="min-h-[100px]"
                         />
                         <p className="text-xs text-muted-foreground">
-                          This message will be sent when customers rate their experience as "Not Expected"
+                          This message will be sent when customers rate their experience as "Need Improvement"
                         </p>
                       </div>
                     </div>
@@ -1393,7 +1393,7 @@ export default function BusinessDetailPage() {
                   Customer Manual Reviews
                 </CardTitle>
                 <CardDescription>
-                  Reviews from customers who selected "Not Expected" rating
+                  Reviews from customers who selected "Need Improvement" rating
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1402,7 +1402,7 @@ export default function BusinessDetailPage() {
                       <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                       <p className="text-muted-foreground">No manual reviews yet</p>
                       <p className="text-sm text-muted-foreground mt-2">
-                        Reviews from customers who selected "Not Expected" will appear here
+                        Reviews from customers who selected "Need Improvement" will appear here
                       </p>
                     </div>
                   ) : (

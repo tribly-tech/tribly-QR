@@ -58,7 +58,7 @@ export interface Business {
 export interface Review {
   id: string;
   businessId: string;
-  rating: "excellent" | "good" | "not-expected";
+  rating: "excellent" | "good" | "average" | "need-improvement";
   feedback?: string;
   category?: ReviewCategory; // Category of the review feedback
   customerName?: string;
