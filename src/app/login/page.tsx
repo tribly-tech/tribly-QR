@@ -106,7 +106,7 @@ export default function LoginPage() {
                   placeholder="admin@tribly.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 h-[48px]"
                   required
                   disabled={isLoading}
                 />
@@ -123,7 +123,7 @@ export default function LoginPage() {
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 h-[48px]"
                   required
                   disabled={isLoading}
                 />
@@ -147,14 +147,6 @@ export default function LoginPage() {
                 </>
               )}
             </Button>
-
-            <div className="text-center text-xs text-muted-foreground pt-2 space-y-1">
-              <p className="font-semibold">Demo Credentials:</p>
-              <div className="space-y-1">
-                <p className="font-mono">Admin: admin@tribly.com / admin123</p>
-                <p className="font-mono">Business: contact@coffeehouse.com / coffee123</p>
-              </div>
-            </div>
           </form>
         </CardContent>
       </Card>

@@ -16,26 +16,28 @@ import {
   getSalesTeam, 
   addSalesTeamMember, 
   removeSalesTeamMember,
+  updateSalesTeamMember,
   logout,
   User
 } from "@/lib/auth";
 import { UserRole } from "@/lib/types";
-import { 
-  ArrowLeft,
-  User as UserIcon,
-  Mail,
-  Phone,
-  Calendar,
-  Shield,
-  Users,
-  Plus,
-  Trash2,
-  Save,
-  LogOut,
-  Settings,
-  CheckCircle2,
-  X
-} from "lucide-react";
+  import { 
+    ArrowLeft,
+    User as UserIcon,
+    Mail,
+    Phone,
+    Calendar,
+    Shield,
+    Users,
+    Plus,
+    Trash2,
+    Save,
+    LogOut,
+    Settings,
+    CheckCircle2,
+    X,
+    Edit
+  } from "lucide-react";
 import { DialogClose } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -49,7 +51,14 @@ export default function ProfilePage() {
   });
   const [salesTeam, setSalesTeam] = useState<User[]>([]);
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [isEditMemberOpen, setIsEditMemberOpen] = useState(false);
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [newMember, setNewMember] = useState({
+    name: "",
+    email: "",
+    phone: "",
+  });
+  const [editingMember, setEditingMember] = useState({
     name: "",
     email: "",
     phone: "",
@@ -109,6 +118,27 @@ export default function ProfilePage() {
   const handleRemoveSalesTeamMember = (memberId: string) => {
     removeSalesTeamMember(memberId);
     setSalesTeam(getSalesTeam());
+  };
+
+  const handleEditSalesTeamMember = (member: User) => {
+    setEditingMemberId(member.id);
+    setEditingMember({
+      name: member.name,
+      email: member.email,
+      phone: member.phone || "",
+    });
+    setIsEditMemberOpen(true);
+  };
+
+  const handleUpdateSalesTeamMember = () => {
+    if (!editingMemberId || !editingMember.name || !editingMember.email) {
+      return;
+    }
+    updateSalesTeamMember(editingMemberId, editingMember);
+    setSalesTeam(getSalesTeam());
+    setEditingMember({ name: "", email: "", phone: "" });
+    setEditingMemberId(null);
+    setIsEditMemberOpen(false);
   };
 
   const handleLogout = async () => {
@@ -297,6 +327,18 @@ export default function ProfilePage() {
                             </DialogHeader>
                             <div className="grid gap-4 py-4">
                               <div className="grid gap-2">
+                                <Label htmlFor="member-salesperson-id">Sales Person ID</Label>
+                                <Input
+                                  id="member-salesperson-id"
+                                  value="Auto-generated"
+                                  disabled
+                                  className="bg-muted"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  A unique ID will be automatically generated when you add the member
+                                </p>
+                              </div>
+                              <div className="grid gap-2">
                                 <Label htmlFor="member-name">Full Name *</Label>
                                 <Input
                                   id="member-name"
@@ -343,6 +385,71 @@ export default function ProfilePage() {
                             </DialogFooter>
                           </DialogContent>
                         </Dialog>
+                        <Dialog open={isEditMemberOpen} onOpenChange={setIsEditMemberOpen}>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Edit Sales Team Member</DialogTitle>
+                              <DialogDescription>
+                                Update the details of this sales team member
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-4 py-4">
+                              <div className="grid gap-2">
+                                <Label htmlFor="edit-member-salesperson-id">Sales Person ID</Label>
+                                <Input
+                                  id="edit-member-salesperson-id"
+                                  value={salesTeam.find(m => m.id === editingMemberId)?.salesPersonId || "-"}
+                                  disabled
+                                  className="bg-muted font-mono"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Sales Person ID cannot be changed
+                                </p>
+                              </div>
+                              <div className="grid gap-2">
+                                <Label htmlFor="edit-member-name">Full Name *</Label>
+                                <Input
+                                  id="edit-member-name"
+                                  value={editingMember.name}
+                                  onChange={(e) => setEditingMember({ ...editingMember, name: e.target.value })}
+                                  placeholder="Enter full name"
+                                />
+                              </div>
+                              <div className="grid gap-2">
+                                <Label htmlFor="edit-member-email">Email Address *</Label>
+                                <Input
+                                  id="edit-member-email"
+                                  type="email"
+                                  value={editingMember.email}
+                                  onChange={(e) => setEditingMember({ ...editingMember, email: e.target.value })}
+                                  placeholder="member@example.com"
+                                />
+                              </div>
+                              <div className="grid gap-2">
+                                <Label htmlFor="edit-member-phone">Phone Number</Label>
+                                <Input
+                                  id="edit-member-phone"
+                                  type="tel"
+                                  value={editingMember.phone}
+                                  onChange={(e) => setEditingMember({ ...editingMember, phone: e.target.value })}
+                                  placeholder="+91 98765 43210"
+                                />
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button variant="outline" onClick={() => setIsEditMemberOpen(false)}>
+                                Cancel
+                              </Button>
+                              <Button
+                                onClick={handleUpdateSalesTeamMember}
+                                disabled={!editingMember.name || !editingMember.email}
+                              >
+                                <CheckCircle2 className="mr-2 h-4 w-4" />
+                                Update Member
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
                       </div>
                       {salesTeam.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
@@ -355,6 +462,7 @@ export default function ProfilePage() {
                           <Table>
                             <TableHeader>
                               <TableRow>
+                                <TableHead>Sales Person ID</TableHead>
                                 <TableHead>Name</TableHead>
                                 <TableHead>Email</TableHead>
                                 <TableHead>Phone</TableHead>
@@ -365,6 +473,7 @@ export default function ProfilePage() {
                             <TableBody>
                               {salesTeam.map((member) => (
                                 <TableRow key={member.id}>
+                                  <TableCell className="font-mono font-medium">{member.salesPersonId || "-"}</TableCell>
                                   <TableCell className="font-medium">{member.name}</TableCell>
                                   <TableCell>{member.email}</TableCell>
                                   <TableCell>{member.phone || "-"}</TableCell>
@@ -374,14 +483,24 @@ export default function ProfilePage() {
                                       : "-"}
                                   </TableCell>
                                   <TableCell className="text-right">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => handleRemoveSalesTeamMember(member.id)}
-                                      className="text-destructive hover:text-destructive"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
+                                    <div className="flex items-center justify-end gap-2">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handleEditSalesTeamMember(member)}
+                                        className="hover:text-primary"
+                                      >
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handleRemoveSalesTeamMember(member.id)}
+                                        className="text-destructive hover:text-destructive"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
                                   </TableCell>
                                 </TableRow>
                               ))}

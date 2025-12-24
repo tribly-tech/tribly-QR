@@ -17,9 +17,14 @@ import { BusinessStatus, BusinessCategory } from "@/lib/types";
 import { logout, setStoredUser, getStoredUser } from "@/lib/auth";
 import { 
   LogOut,
-  User,
   ChevronDown,
-  CheckCircle2
+  CheckCircle2,
+  Crown,
+  Shield,
+  Check,
+  Star,
+  CreditCard,
+  Calendar
 } from "lucide-react";
 
 export default function SalesDashboardPage() {
@@ -68,6 +73,7 @@ export default function SalesDashboardPage() {
     city: "",
     area: "",
     category: "" as BusinessCategory | "",
+    overview: "",
     googleBusinessReviewLink: "",
     paymentPlan: "" as "qr-basic" | "qr-plus" | "",
     status: "active" as BusinessStatus,
@@ -96,6 +102,7 @@ export default function SalesDashboardPage() {
       city: "",
       area: "",
       category: "" as BusinessCategory | "",
+      overview: "",
       googleBusinessReviewLink: "",
       paymentPlan: "" as "qr-basic" | "qr-plus" | "",
       status: "active" as BusinessStatus,
@@ -116,7 +123,7 @@ export default function SalesDashboardPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">Onboard New Business</h1>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Onboard Business</h1>
             <p className="text-muted-foreground">Fill in the business details to onboard a new client</p>
           </div>
           <div className="flex items-center gap-3">
@@ -135,11 +142,6 @@ export default function SalesDashboardPage() {
                       <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
                     </div>
                   </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
-                    <User className="mr-2 h-4 w-4" />
-                    <span>Profile</span>
-                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
                     <LogOut className="mr-2 h-4 w-4" />
@@ -205,6 +207,33 @@ export default function SalesDashboardPage() {
                   </Select>
                   <p className="text-xs text-muted-foreground">
                     Select the primary category that best describes the business
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Business Overview Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Business Overview</CardTitle>
+              <CardDescription>
+                Provide a brief description of the business
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="overview">Business Overview</Label>
+                  <Textarea
+                    id="overview"
+                    placeholder="Describe the business, its services, specialties, and what makes it unique..."
+                    value={newBusiness.overview}
+                    onChange={(e) => setNewBusiness({ ...newBusiness, overview: e.target.value })}
+                    className="min-h-[120px] resize-none"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    A brief description of the business that will be displayed on the business profile
                   </p>
                 </div>
               </div>
@@ -300,36 +329,16 @@ export default function SalesDashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Business Settings Section */}
+          {/* Business Settings Section - Google Review Link */}
           <Card>
             <CardHeader>
               <CardTitle>Business Settings</CardTitle>
               <CardDescription>
-                Configure payment plan and review settings
+                Configure review settings
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="payment-plan">
-                    Payment Plan <span className="text-destructive">*</span>
-                  </Label>
-                  <Select
-                    value={newBusiness.paymentPlan}
-                    onValueChange={(value) => setNewBusiness({ ...newBusiness, paymentPlan: value as "qr-basic" | "qr-plus" })}
-                  >
-                    <SelectTrigger id="payment-plan">
-                      <SelectValue placeholder="Select a payment plan" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="qr-basic">QR-Basic</SelectItem>
-                      <SelectItem value="qr-plus">QR-Plus</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Choose the subscription plan for this business. QR-Plus includes advanced features.
-                  </p>
-                </div>
                 <div className="grid gap-2">
                   <Label htmlFor="google-review-link">Google Business Review Link</Label>
                   <Input
@@ -343,6 +352,212 @@ export default function SalesDashboardPage() {
                     Optional: Add your Google Business review link to redirect customers after they submit feedback
                   </p>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Plans Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Plans</CardTitle>
+              <CardDescription>
+                Configure payment plan and review settings
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label>
+                    Payment Plan <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* QR-Plus Plan */}
+                    <Card 
+                      className={`relative cursor-pointer transition-all hover:shadow-md ${
+                        newBusiness.paymentPlan === "qr-plus" ? "ring-2 ring-primary" : ""
+                      }`}
+                      onClick={() => setNewBusiness({ ...newBusiness, paymentPlan: "qr-plus" })}
+                    >
+                      <CardHeader>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <div className="p-3 rounded-xl bg-primary text-primary-foreground">
+                              <Crown className="h-6 w-6" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <CardTitle className="text-2xl">QR-Plus</CardTitle>
+                                <Badge variant="secondary" className="text-xs">Premium</Badge>
+                              </div>
+                              <CardDescription>Advanced features for growth</CardDescription>
+                              <div className="mt-1">
+                                <span className="text-2xl font-bold">₹5,999</span>
+                                <span className="text-sm text-muted-foreground">/year</span>
+                              </div>
+                            </div>
+                          </div>
+                          {newBusiness.paymentPlan === "qr-plus" && (
+                            <Badge variant="default" className="text-xs">
+                              Selected
+                            </Badge>
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-3">
+                          <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">All QR-Basic Features, Plus:</h4>
+                          <div className="space-y-2">
+                            <div className="flex items-start gap-3">
+                              <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">Negative Feedback Control & Care</p>
+                                <p className="text-xs text-muted-foreground">Proactive management of negative reviews</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">Positive Feedback Growth</p>
+                                <p className="text-xs text-muted-foreground">Strategies to boost positive reviews</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">SEO Boost</p>
+                                <p className="text-xs text-muted-foreground">Enhanced search engine visibility</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">AI Auto Reply</p>
+                                <p className="text-xs text-muted-foreground">Intelligent automated responses</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">Advanced Analytics</p>
+                                <p className="text-xs text-muted-foreground">Deep insights and trend analysis</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">Priority Support</p>
+                                <p className="text-xs text-muted-foreground">24/7 dedicated customer support</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* QR-Basic Plan */}
+                    <Card 
+                      className={`relative cursor-pointer transition-all hover:shadow-md ${
+                        newBusiness.paymentPlan === "qr-basic" ? "ring-2 ring-primary" : ""
+                      }`}
+                      onClick={() => setNewBusiness({ ...newBusiness, paymentPlan: "qr-basic" })}
+                    >
+                      <CardHeader>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <div className="p-3 rounded-xl bg-muted">
+                              <Shield className="h-6 w-6" />
+                            </div>
+                            <div>
+                              <CardTitle className="text-2xl">QR-Basic</CardTitle>
+                              <CardDescription>Essential features for your business</CardDescription>
+                              <div className="mt-1">
+                                <span className="text-2xl font-bold">₹2,499</span>
+                                <span className="text-sm text-muted-foreground">/year</span>
+                              </div>
+                            </div>
+                          </div>
+                          {newBusiness.paymentPlan === "qr-basic" && (
+                            <Badge variant="default" className="text-xs">
+                              Selected
+                            </Badge>
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-3">
+                          <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Features</h4>
+                          <div className="space-y-2">
+                            <div className="flex items-start gap-3">
+                              <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">AI Suggested Feedbacks</p>
+                                <p className="text-xs text-muted-foreground">Get intelligent feedback suggestions</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">Hassle-free Review Collection</p>
+                                <p className="text-xs text-muted-foreground">Collect reviews in under 30 seconds</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">Dynamic Dashboard</p>
+                                <p className="text-xs text-muted-foreground">Real-time insights and analytics</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">No Repetition</p>
+                                <p className="text-xs text-muted-foreground">Smart duplicate detection</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Click on a plan card to select it. QR-Plus includes advanced features.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Payment Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Payment
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Plan Expiry Date</Label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-lg font-semibold">
+                      Not set
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Payment will be completed after business creation
+                  </p>
+                </div>
+                <Button
+                  size="lg"
+                  className="gap-2"
+                  disabled={!newBusiness.paymentPlan}
+                >
+                  <CreditCard className="h-5 w-5" />
+                  Complete Payment
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -362,6 +577,7 @@ export default function SalesDashboardPage() {
                       city: "",
                       area: "",
                       category: "" as BusinessCategory | "",
+                      overview: "",
                       googleBusinessReviewLink: "",
                       paymentPlan: "" as "qr-basic" | "qr-plus" | "",
                       status: "active" as BusinessStatus,

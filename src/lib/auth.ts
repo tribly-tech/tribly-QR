@@ -13,6 +13,7 @@ export interface User {
   phone?: string;
   createdAt?: string;
   businessId?: string; // For business users, link to their business
+  salesPersonId?: string; // Unique ID for sales team members
 }
 
 // Mock users for development
@@ -134,6 +135,7 @@ export function getSalesTeam(): User[] {
       role: "sales-team",
       phone: "+91 98765 43210",
       createdAt: new Date().toISOString(),
+      salesPersonId: "tribly0001",
     },
   ];
   setSalesTeam(defaultSalesTeam);
@@ -145,13 +147,24 @@ export function setSalesTeam(team: User[]): void {
   localStorage.setItem("tribly_sales_team", JSON.stringify(team));
 }
 
-export function addSalesTeamMember(member: Omit<User, "id" | "createdAt">): User {
+export function addSalesTeamMember(member: Omit<User, "id" | "createdAt" | "salesPersonId">): User {
   const team = getSalesTeam();
+  // Generate unique salesPersonId (triblyXXXX format)
+  const existingIds = team
+    .filter(m => m.salesPersonId)
+    .map(m => {
+      const match = m.salesPersonId?.match(/tribly(\d+)/);
+      return match ? parseInt(match[1]) : 0;
+    });
+  const nextId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+  const salesPersonId = `tribly${String(nextId).padStart(4, '0')}`;
+  
   const newMember: User = {
     ...member,
     id: `sales-${Date.now()}`,
     role: "sales-team",
     createdAt: new Date().toISOString(),
+    salesPersonId,
   };
   team.push(newMember);
   setSalesTeam(team);
@@ -162,5 +175,19 @@ export function removeSalesTeamMember(memberId: string): void {
   const team = getSalesTeam();
   const filtered = team.filter(m => m.id !== memberId);
   setSalesTeam(filtered);
+}
+
+export function updateSalesTeamMember(memberId: string, updates: Partial<Omit<User, "id" | "createdAt" | "role">>): User | null {
+  const team = getSalesTeam();
+  const memberIndex = team.findIndex(m => m.id === memberId);
+  if (memberIndex === -1) return null;
+  
+  const updatedMember: User = {
+    ...team[memberIndex],
+    ...updates,
+  };
+  team[memberIndex] = updatedMember;
+  setSalesTeam(team);
+  return updatedMember;
 }
 
