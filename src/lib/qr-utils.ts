@@ -32,7 +32,7 @@ export function generateShortUrlCode(businessId: string): string {
  * Generate the full review URL for a business
  */
 export function generateReviewUrl(businessCode: string): string {
-  return `https://triblyqr.netlify.app/review/${businessCode}`;
+  return `https://triblyqr.netlify.app/review?qr=${businessCode}`;
 }
 
 /**
