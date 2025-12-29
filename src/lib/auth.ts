@@ -136,7 +136,8 @@ export function setAuthToken(token: string | null): void {
   }
 }
 
-// Sales Team Management
+// Sales Team Management (localStorage - for backwards compatibility)
+// Note: Sales team is now primarily managed via API in the profile page
 export function getSalesTeam(): User[] {
   if (typeof window === "undefined") return [];
   const stored = localStorage.getItem("tribly_sales_team");
@@ -147,20 +148,8 @@ export function getSalesTeam(): User[] {
       return [];
     }
   }
-  // Initialize with a test sales team member if none exist
-  const defaultSalesTeam: User[] = [
-    {
-      id: "sales-test-1",
-      email: "sales@tribly.com",
-      name: "Test Sales User",
-      role: "sales-team",
-      phone: "+91 98765 43210",
-      createdAt: new Date().toISOString(),
-      salesPersonId: "tribe" + String(Math.floor(Math.random() * 10000)).padStart(4, '0'),
-    },
-  ];
-  setSalesTeam(defaultSalesTeam);
-  return defaultSalesTeam;
+  // Return empty array - no auto-creation of test data
+  return [];
 }
 
 export function setSalesTeam(team: User[]): void {

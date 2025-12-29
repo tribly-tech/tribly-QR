@@ -15,6 +15,7 @@ function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectUrl = searchParams.get("redirect");
+  const qrId = searchParams.get("qr"); // QR ID from scan flow
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -24,6 +25,16 @@ function LoginPageContent() {
     // Check if user is already logged in
     const user = getStoredUser();
     if (user) {
+      // If there's a QR ID from scan, handle based on user type
+      if (qrId) {
+        if (user.role === "sales-team" || user.userType === "sales_team") {
+          router.push(`/sales-dashboard?qr=${qrId}`);
+        } else {
+          router.push(`/dashboard/business/${qrId}`);
+        }
+        return;
+      }
+
       // If there's a redirect URL, use it
       if (redirectUrl) {
         router.push(redirectUrl);
@@ -47,7 +58,7 @@ function LoginPageContent() {
         router.push("/dashboard");
       }
     }
-  }, [router, redirectUrl]);
+  }, [router, redirectUrl, qrId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,17 +97,36 @@ function LoginPageContent() {
 
       // Create user object from API response
       const userData = data.data;
+
+      // Determine role based on user_type from API
+      let userRole: "admin" | "sales-team" | "business" = "business";
+      if (userData.user_type === "admin") {
+        userRole = "admin";
+      } else if (userData.user_type === "sales_team" || userData.user_type === "sales-team") {
+        userRole = "sales-team";
+      }
+
       const user = {
         id: userData.qr_id || `qr-user-${Date.now()}`,
         email: trimmedEmail,
         name: userData.name || trimmedEmail,
-        role: "business" as const,
+        role: userRole,
         businessId: userData.qr_id,
         qrId: userData.qr_id,
         userType: userData.user_type,
       };
 
       setStoredUser(user);
+
+      // If there's a QR ID from scan, handle based on user type
+      if (qrId) {
+        if (userRole === "sales-team") {
+          router.push(`/sales-dashboard?qr=${qrId}`);
+        } else {
+          router.push(`/dashboard/business/${qrId}`);
+        }
+        return;
+      }
 
       // If there's a redirect URL, use it
       if (redirectUrl) {
@@ -105,7 +135,9 @@ function LoginPageContent() {
       }
 
       // Redirect based on user type
-      if (userData.user_type === "business_qr_user" && userData.qr_id) {
+      if (userRole === "sales-team") {
+        router.push("/sales-dashboard");
+      } else if (userData.user_type === "business_qr_user" && userData.qr_id) {
         router.push(`/dashboard/business/${userData.qr_id}`);
       } else if (userData.user_type === "admin") {
         router.push("/dashboard");

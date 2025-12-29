@@ -47,6 +47,7 @@ export interface Business {
   billingDate?: string; // ISO date string for billing date
   // Sales Team
   salesTeamId?: string; // ID of the sales team member who onboarded this business
+  onboarded_by?: string; // Name of the person who onboarded this business
   // SEO
   keywords?: string[]; // SEO keywords for the business
   // Stats
@@ -69,4 +70,3 @@ export interface Review {
   autoReplySent: boolean;
   createdAt: string;
 }
-

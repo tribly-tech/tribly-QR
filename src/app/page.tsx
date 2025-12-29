@@ -11,20 +11,17 @@ export default function Home() {
     const user = getStoredUser();
 
     if (!user) {
-      // User is not logged in, redirect to login
       router.replace("/login");
     } else {
-      // User is logged in
       const isAdmin = user.role === "admin" || user.userType === "admin";
-
+      const isSalesTeam = user.role === "sales-team" || user.userType === "sales-team";
       if (isAdmin) {
-        // Admin users go to dashboard
         router.replace("/dashboard");
+      } else if (isSalesTeam) {
+        router.replace("/sales-dashboard");
       } else if (user.qrId) {
-        // Business users go to their business dashboard
         router.replace(`/dashboard/business/${user.qrId}`);
       } else {
-        // Fallback: if no qrId, redirect to login
         router.replace("/login");
       }
     }

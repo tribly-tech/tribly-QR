@@ -115,6 +115,7 @@ export default function DashboardPage() {
             feedbackTone: "friendly" as const, // Default value
             autoReplyEnabled: true, // Default value
             salesTeamId: salesTeamId || undefined,
+            onboarded_by: business.onboarded_by || "admin",
             totalReviews: business.feedback_count || 0, // Default value - can be updated if API provides it
             activeReviews: 0,
             inactiveReviews: 0,
@@ -224,6 +225,17 @@ export default function DashboardPage() {
     return getSalesTeam();
   }, []);
 
+  // Get unique onboarded_by values for filter
+  const uniqueOnboardedBy = useMemo(() => {
+    const onboardedBySet = new Set<string>();
+    availableBusinesses.forEach((business) => {
+      if (business.onboarded_by) {
+        onboardedBySet.add(business.onboarded_by);
+      }
+    });
+    return Array.from(onboardedBySet).sort();
+  }, [availableBusinesses]);
+
   // Helper function to get sales team member name by ID
   const getSalesTeamMemberName = (salesTeamId?: string): string => {
     if (!salesTeamId) return "Admin";
@@ -264,13 +276,7 @@ export default function DashboardPage() {
 
     // Apply onboarded by filter
     if (onboardedByFilter !== "all") {
-      if (onboardedByFilter === "admin") {
-        // Filter for businesses without salesTeamId (onboarded by admin)
-        filtered = filtered.filter((business) => !business.salesTeamId);
-      } else {
-        // Filter for businesses onboarded by specific sales team member
-        filtered = filtered.filter((business) => business.salesTeamId === onboardedByFilter);
-      }
+      filtered = filtered.filter((business) => business.onboarded_by === onboardedByFilter);
     }
 
     // Apply status filter
@@ -541,14 +547,13 @@ export default function DashboardPage() {
                 <Label htmlFor="onboarded-by-filter">Onboarded By</Label>
                 <Select value={onboardedByFilter} onValueChange={setOnboardedByFilter}>
                   <SelectTrigger id="onboarded-by-filter">
-                    <SelectValue placeholder="All Sales Team" />
+                    <SelectValue placeholder="All" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Sales Team</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    {salesTeam.map((member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        {member.name}
+                    <SelectItem value="all">All</SelectItem>
+                    {uniqueOnboardedBy.map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -629,7 +634,7 @@ export default function DashboardPage() {
                           )}
                           <span className="flex items-center gap-1">
                             <UserCircle className="h-3 w-3" />
-                            Onboarded by {getSalesTeamMemberName(business.salesTeamId)}
+                            Onboarded by {business.onboarded_by}
                           </span>
                         </div>
                       </div>

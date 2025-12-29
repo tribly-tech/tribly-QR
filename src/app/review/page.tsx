@@ -18,6 +18,14 @@ function ReviewPageContent() {
 
       setIsChecking(true);
 
+      // Check if logged-in user is a sales team member
+      const currentUser = getStoredUser();
+      if (currentUser && (currentUser.role === "sales-team" || currentUser.userType === "sales_team")) {
+        // Redirect sales team members to the sales dashboard with QR ID
+        router.push(`/sales-dashboard?qr=${qrId}`);
+        return;
+      }
+
       try {
         // First, check QR configuration via API
         const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
@@ -31,11 +39,10 @@ function ReviewPageContent() {
 
         const data = await response.json();
 
-        // If not configured, redirect to login page
+        // If not configured, redirect to login page with QR ID
         if (!data?.data?.is_configured) {
-          // Always redirect to login if QR is not configured
-          const redirectUrl = `/dashboard/business/${qrId}`;
-          router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
+          // Pass the QR ID so login page can redirect appropriately based on user type
+          router.push(`/login?qr=${qrId}`);
           return;
         }
 

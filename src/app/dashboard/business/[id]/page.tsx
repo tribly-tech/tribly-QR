@@ -155,6 +155,7 @@ export default function BusinessDetailPage() {
             keywords: Array.isArray(qrData.business_tags) ? qrData.business_tags : [],
             feedbackTone: "professional",
             autoReplyEnabled: false,
+            paymentPlan: (qrData.plan === "qr-plus" || qrData.plan === "qr-basic") ? qrData.plan : undefined,
             totalReviews: 0,
             activeReviews: 0,
             inactiveReviews: 0,
@@ -930,11 +931,11 @@ export default function BusinessDetailPage() {
               </div>
               <p className="text-muted-foreground">{business.email}</p>
             </div>
-            {isBusinessOwner && (
+            {currentUser && (
               <Button
                 variant="outline"
                 onClick={handleLogout}
-                className="gap-2"
+                className="gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
               >
                 <LogOut className="h-4 w-4" />
                 Logout
