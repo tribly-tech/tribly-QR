@@ -19,11 +19,11 @@ function simpleHash(str: string): string {
  */
 export function generateShortUrlCode(businessId: string): string {
   // Create a hash from business ID for security
-  const secret = typeof window !== "undefined" 
-    ? "tribly-secret-key" 
+  const secret = typeof window !== "undefined"
+    ? "tribly-secret-key"
     : process.env.NEXT_PUBLIC_QR_SECRET || "tribly-secret-key";
   const hash = simpleHash(businessId + secret);
-  
+
   // Combine with business ID prefix for uniqueness
   return `${businessId.slice(0, 4)}-${hash}`;
 }
@@ -32,11 +32,7 @@ export function generateShortUrlCode(businessId: string): string {
  * Generate the full review URL for a business
  */
 export function generateReviewUrl(businessCode: string): string {
-  const baseUrl = typeof window !== "undefined" 
-    ? window.location.origin 
-    : process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-  
-  return `${baseUrl}/review/${businessCode}`;
+  return `https://triblyqr.netlify.app/review?qr=${businessCode}`;
 }
 
 /**
@@ -87,7 +83,7 @@ export async function generateQRCodeBlob(url: string): Promise<Blob> {
       },
       width: 300,
     });
-    
+
     return new Promise((resolve, reject) => {
       canvas.toBlob((blob) => {
         if (blob) {
@@ -102,4 +98,3 @@ export async function generateQRCodeBlob(url: string): Promise<Blob> {
     throw error;
   }
 }
-

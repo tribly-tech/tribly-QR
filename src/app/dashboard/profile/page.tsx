@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,36 +10,48 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  getStoredUser, 
-  setStoredUser, 
-  getSalesTeam, 
-  addSalesTeamMember, 
-  removeSalesTeamMember,
-  updateSalesTeamMember,
+import {
+  getStoredUser,
+  setStoredUser,
+  getAuthToken,
   logout,
   User
 } from "@/lib/auth";
 import { UserRole } from "@/lib/types";
-  import { 
-    ArrowLeft,
-    User as UserIcon,
-    Mail,
-    Phone,
-    Calendar,
-    Shield,
-    Users,
-    Plus,
-    Trash2,
-    Save,
-    LogOut,
-    Settings,
-    CheckCircle2,
-    X,
-    Edit
-  } from "lucide-react";
+import {
+  ArrowLeft,
+  User as UserIcon,
+  Mail,
+  Phone,
+  Calendar,
+  Shield,
+  Users,
+  Plus,
+  Trash2,
+  Save,
+  LogOut,
+  Settings,
+  CheckCircle2,
+  X,
+  Edit,
+  Loader2,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  RefreshCw,
+  Lock
+} from "lucide-react";
 import { DialogClose } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+// API Sales Team Member type
+interface SalesTeamMember {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  createdAt?: string;
+}
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -49,20 +61,78 @@ export default function ProfilePage() {
     email: "",
     phone: "",
   });
-  const [salesTeam, setSalesTeam] = useState<User[]>([]);
+  const [salesTeam, setSalesTeam] = useState<SalesTeamMember[]>([]);
+  const [isLoadingSalesTeam, setIsLoadingSalesTeam] = useState(false);
+  const [salesTeamError, setSalesTeamError] = useState<string | null>(null);
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [isAddingMember, setIsAddingMember] = useState(false);
+  const [addMemberError, setAddMemberError] = useState<string | null>(null);
   const [isEditMemberOpen, setIsEditMemberOpen] = useState(false);
+  const [isUpdatingMember, setIsUpdatingMember] = useState(false);
+  const [updateMemberError, setUpdateMemberError] = useState<string | null>(null);
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [newMember, setNewMember] = useState({
     name: "",
     email: "",
-    phone: "",
+    password: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [editingMember, setEditingMember] = useState({
     name: "",
     email: "",
     phone: "",
   });
+
+  // Fetch sales team from API
+  const fetchSalesTeam = useCallback(async () => {
+    setIsLoadingSalesTeam(true);
+    setSalesTeamError(null);
+
+    try {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+      const authToken = getAuthToken();
+
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+
+      if (authToken) {
+        headers["Authorization"] = `Bearer ${authToken}`;
+      }
+
+      const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/sales_team`, {
+        method: "GET",
+        headers,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to fetch sales team");
+      }
+
+      const data = await response.json();
+
+      if (data.status !== "success") {
+        throw new Error(data.message || "Failed to fetch sales team");
+      }
+
+      // Map API response to local format
+      const mappedTeam: SalesTeamMember[] = (data.data || []).map((member: any) => ({
+        id: member.id || member._id || `member-${Date.now()}`,
+        name: member.name || "",
+        email: member.email || "",
+        phone: member.phone || "",
+        createdAt: member.created_at || member.createdAt || new Date().toISOString(),
+      }));
+
+      setSalesTeam(mappedTeam);
+    } catch (error: any) {
+      console.error("Error fetching sales team:", error);
+      setSalesTeamError(error.message || "Failed to load sales team");
+    } finally {
+      setIsLoadingSalesTeam(false);
+    }
+  }, []);
 
   useEffect(() => {
     const currentUser = getStoredUser();
@@ -70,27 +140,32 @@ export default function ProfilePage() {
       router.push("/login");
       return;
     }
-    
+
     // Ensure user has role property (migration for existing users)
     if (!currentUser.role) {
       // Default to admin for existing admin@tribly.com users
       const updatedUser = {
         ...currentUser,
-        role: currentUser.email === "admin@tribly.com" ? "admin" : "sales-team",
+        role: (currentUser.email === "admin@tribly.com" ? "admin" : "sales-team") as UserRole,
       };
       setStoredUser(updatedUser);
       setUser(updatedUser);
     } else {
       setUser(currentUser);
     }
-    
+
     setProfileData({
       name: currentUser.name,
       email: currentUser.email,
       phone: currentUser.phone || "",
     });
-    setSalesTeam(getSalesTeam());
-  }, [router]);
+
+    // Fetch sales team for admin users
+    const isUserAdmin = currentUser.role === "admin" || (!currentUser.role && currentUser.email === "admin@tribly.com");
+    if (isUserAdmin) {
+      fetchSalesTeam();
+    }
+  }, [router, fetchSalesTeam]);
 
   const handleSaveProfile = () => {
     if (user) {
@@ -105,40 +180,126 @@ export default function ProfilePage() {
     }
   };
 
-  const handleAddSalesTeamMember = () => {
-    if (!newMember.name || !newMember.email) {
+  const handleAddSalesTeamMember = async () => {
+    if (!newMember.name || !newMember.email || !newMember.password) {
+      setAddMemberError("Please fill in all required fields");
       return;
     }
-    const member = addSalesTeamMember(newMember);
-    setSalesTeam(getSalesTeam());
-    setNewMember({ name: "", email: "", phone: "" });
-    setIsAddMemberOpen(false);
+
+    setIsAddingMember(true);
+    setAddMemberError(null);
+
+    try {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+      const authToken = getAuthToken();
+
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+
+      if (authToken) {
+        headers["Authorization"] = `Bearer ${authToken}`;
+      }
+
+      const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/sales_team`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name: newMember.name.trim(),
+          email: newMember.email.trim().toLowerCase(),
+          password: newMember.password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.status !== "success") {
+        throw new Error(data.message || "Failed to add sales team member");
+      }
+
+      // Refresh the sales team list
+      await fetchSalesTeam();
+
+      // Reset form and close dialog
+      setNewMember({ name: "", email: "", password: "" });
+      setShowPassword(false);
+      setIsAddMemberOpen(false);
+    } catch (error: any) {
+      console.error("Error adding sales team member:", error);
+      setAddMemberError(error.message || "Failed to add member. Please try again.");
+    } finally {
+      setIsAddingMember(false);
+    }
   };
 
   const handleRemoveSalesTeamMember = (memberId: string) => {
-    removeSalesTeamMember(memberId);
-    setSalesTeam(getSalesTeam());
+    // For now, just remove from local state
+    // TODO: Add API call for deletion when available
+    setSalesTeam(prevTeam => prevTeam.filter(m => m.id !== memberId));
   };
 
-  const handleEditSalesTeamMember = (member: User) => {
+  const handleEditSalesTeamMember = (member: SalesTeamMember) => {
     setEditingMemberId(member.id);
     setEditingMember({
       name: member.name,
       email: member.email,
       phone: member.phone || "",
     });
+    setUpdateMemberError(null);
     setIsEditMemberOpen(true);
   };
 
-  const handleUpdateSalesTeamMember = () => {
+  const handleUpdateSalesTeamMember = async () => {
     if (!editingMemberId || !editingMember.name || !editingMember.email) {
+      setUpdateMemberError("Please fill in all required fields");
       return;
     }
-    updateSalesTeamMember(editingMemberId, editingMember);
-    setSalesTeam(getSalesTeam());
-    setEditingMember({ name: "", email: "", phone: "" });
-    setEditingMemberId(null);
-    setIsEditMemberOpen(false);
+
+    setIsUpdatingMember(true);
+    setUpdateMemberError(null);
+
+    try {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+      const authToken = getAuthToken();
+
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+
+      if (authToken) {
+        headers["Authorization"] = `Bearer ${authToken}`;
+      }
+
+      const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/sales_team`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          id: editingMemberId,
+          name: editingMember.name.trim(),
+          email: editingMember.email.trim().toLowerCase(),
+          phone: editingMember.phone?.trim() || "",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.status !== "success") {
+        throw new Error(data.message || "Failed to update sales team member");
+      }
+
+      // Refresh the sales team list
+      await fetchSalesTeam();
+
+      // Reset form and close dialog
+      setEditingMember({ name: "", email: "", phone: "" });
+      setEditingMemberId(null);
+      setIsEditMemberOpen(false);
+    } catch (error: any) {
+      console.error("Error updating sales team member:", error);
+      setUpdateMemberError(error.message || "Failed to update member. Please try again.");
+    } finally {
+      setIsUpdatingMember(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -311,7 +472,14 @@ export default function ProfilePage() {
                             Manage your sales team members
                           </p>
                         </div>
-                        <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
+                        <Dialog open={isAddMemberOpen} onOpenChange={(open) => {
+                          setIsAddMemberOpen(open);
+                          if (!open) {
+                            setNewMember({ name: "", email: "", password: "" });
+                            setShowPassword(false);
+                            setAddMemberError(null);
+                          }
+                        }}>
                           <DialogTrigger asChild>
                             <Button className="gap-2">
                               <Plus className="h-4 w-4" />
@@ -326,66 +494,107 @@ export default function ProfilePage() {
                               </DialogDescription>
                             </DialogHeader>
                             <div className="grid gap-4 py-4">
-                              <div className="grid gap-2">
-                                <Label htmlFor="member-salesperson-id">Sales Person ID</Label>
-                                <Input
-                                  id="member-salesperson-id"
-                                  value="Auto-generated"
-                                  disabled
-                                  className="bg-muted"
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                  A unique ID will be automatically generated when you add the member
-                                </p>
-                              </div>
+                              {addMemberError && (
+                                <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-md text-sm">
+                                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                                  {addMemberError}
+                                </div>
+                              )}
                               <div className="grid gap-2">
                                 <Label htmlFor="member-name">Full Name *</Label>
-                                <Input
-                                  id="member-name"
-                                  value={newMember.name}
-                                  onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
-                                  placeholder="Enter full name"
-                                />
+                                <div className="relative">
+                                  <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <Input
+                                    id="member-name"
+                                    value={newMember.name}
+                                    onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
+                                    placeholder="Enter full name"
+                                    className="pl-10"
+                                    disabled={isAddingMember}
+                                  />
+                                </div>
                               </div>
                               <div className="grid gap-2">
                                 <Label htmlFor="member-email">Email Address *</Label>
-                                <Input
-                                  id="member-email"
-                                  type="email"
-                                  value={newMember.email}
-                                  onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
-                                  placeholder="member@example.com"
-                                />
+                                <div className="relative">
+                                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <Input
+                                    id="member-email"
+                                    type="email"
+                                    value={newMember.email}
+                                    onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
+                                    placeholder="member@example.com"
+                                    className="pl-10"
+                                    disabled={isAddingMember}
+                                  />
+                                </div>
                               </div>
                               <div className="grid gap-2">
-                                <Label htmlFor="member-phone">Phone Number</Label>
-                                <Input
-                                  id="member-phone"
-                                  type="tel"
-                                  value={newMember.phone}
-                                  onChange={(e) => setNewMember({ ...newMember, phone: e.target.value })}
-                                  placeholder="+91 98765 43210"
-                                />
+                                <Label htmlFor="member-password">Password *</Label>
+                                <div className="relative">
+                                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <Input
+                                    id="member-password"
+                                    type={showPassword ? "text" : "password"}
+                                    value={newMember.password}
+                                    onChange={(e) => setNewMember({ ...newMember, password: e.target.value })}
+                                    placeholder="Enter password"
+                                    className="pl-10 pr-10"
+                                    disabled={isAddingMember}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                    disabled={isAddingMember}
+                                  >
+                                    {showPassword ? (
+                                      <EyeOff className="h-4 w-4" />
+                                    ) : (
+                                      <Eye className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  The member will use this password to login
+                                </p>
                               </div>
-                              <p className="text-xs text-muted-foreground">
-                                Default password for new members: <strong>sales123</strong>
-                              </p>
                             </div>
                             <DialogFooter>
-                              <Button variant="outline" onClick={() => setIsAddMemberOpen(false)}>
+                              <Button
+                                variant="outline"
+                                onClick={() => setIsAddMemberOpen(false)}
+                                disabled={isAddingMember}
+                              >
                                 Cancel
                               </Button>
                               <Button
                                 onClick={handleAddSalesTeamMember}
-                                disabled={!newMember.name || !newMember.email}
+                                disabled={!newMember.name || !newMember.email || !newMember.password || isAddingMember}
                               >
-                                <CheckCircle2 className="mr-2 h-4 w-4" />
-                                Add Member
+                                {isAddingMember ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Adding...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                                    Add Member
+                                  </>
+                                )}
                               </Button>
                             </DialogFooter>
                           </DialogContent>
                         </Dialog>
-                        <Dialog open={isEditMemberOpen} onOpenChange={setIsEditMemberOpen}>
+                        <Dialog open={isEditMemberOpen} onOpenChange={(open) => {
+                          setIsEditMemberOpen(open);
+                          if (!open) {
+                            setEditingMember({ name: "", email: "", phone: "" });
+                            setEditingMemberId(null);
+                            setUpdateMemberError(null);
+                          }
+                        }}>
                           <DialogContent>
                             <DialogHeader>
                               <DialogTitle>Edit Sales Team Member</DialogTitle>
@@ -394,64 +603,105 @@ export default function ProfilePage() {
                               </DialogDescription>
                             </DialogHeader>
                             <div className="grid gap-4 py-4">
-                              <div className="grid gap-2">
-                                <Label htmlFor="edit-member-salesperson-id">Sales Person ID</Label>
-                                <Input
-                                  id="edit-member-salesperson-id"
-                                  value={salesTeam.find(m => m.id === editingMemberId)?.salesPersonId || "-"}
-                                  disabled
-                                  className="bg-muted font-mono"
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                  Sales Person ID cannot be changed
-                                </p>
-                              </div>
+                              {updateMemberError && (
+                                <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-md text-sm">
+                                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                                  {updateMemberError}
+                                </div>
+                              )}
                               <div className="grid gap-2">
                                 <Label htmlFor="edit-member-name">Full Name *</Label>
-                                <Input
-                                  id="edit-member-name"
-                                  value={editingMember.name}
-                                  onChange={(e) => setEditingMember({ ...editingMember, name: e.target.value })}
-                                  placeholder="Enter full name"
-                                />
+                                <div className="relative">
+                                  <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <Input
+                                    id="edit-member-name"
+                                    value={editingMember.name}
+                                    onChange={(e) => setEditingMember({ ...editingMember, name: e.target.value })}
+                                    placeholder="Enter full name"
+                                    className="pl-10"
+                                    disabled={isUpdatingMember}
+                                  />
+                                </div>
                               </div>
                               <div className="grid gap-2">
                                 <Label htmlFor="edit-member-email">Email Address *</Label>
-                                <Input
-                                  id="edit-member-email"
-                                  type="email"
-                                  value={editingMember.email}
-                                  onChange={(e) => setEditingMember({ ...editingMember, email: e.target.value })}
-                                  placeholder="member@example.com"
-                                />
+                                <div className="relative">
+                                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <Input
+                                    id="edit-member-email"
+                                    type="email"
+                                    value={editingMember.email}
+                                    onChange={(e) => setEditingMember({ ...editingMember, email: e.target.value })}
+                                    placeholder="member@example.com"
+                                    className="pl-10"
+                                    disabled={isUpdatingMember}
+                                  />
+                                </div>
                               </div>
                               <div className="grid gap-2">
                                 <Label htmlFor="edit-member-phone">Phone Number</Label>
-                                <Input
-                                  id="edit-member-phone"
-                                  type="tel"
-                                  value={editingMember.phone}
-                                  onChange={(e) => setEditingMember({ ...editingMember, phone: e.target.value })}
-                                  placeholder="+91 98765 43210"
-                                />
+                                <div className="relative">
+                                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <Input
+                                    id="edit-member-phone"
+                                    type="tel"
+                                    value={editingMember.phone}
+                                    onChange={(e) => setEditingMember({ ...editingMember, phone: e.target.value })}
+                                    className="pl-10"
+                                    disabled={isUpdatingMember}
+                                    placeholder="+91 98765 43210"
+                                  />
+                                </div>
                               </div>
                             </div>
                             <DialogFooter>
-                              <Button variant="outline" onClick={() => setIsEditMemberOpen(false)}>
+                              <Button
+                                variant="outline"
+                                onClick={() => setIsEditMemberOpen(false)}
+                                disabled={isUpdatingMember}
+                              >
                                 Cancel
                               </Button>
                               <Button
                                 onClick={handleUpdateSalesTeamMember}
-                                disabled={!editingMember.name || !editingMember.email}
+                                disabled={!editingMember.name || !editingMember.email || isUpdatingMember}
                               >
-                                <CheckCircle2 className="mr-2 h-4 w-4" />
-                                Update Member
+                                {isUpdatingMember ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Updating...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                                    Update Member
+                                  </>
+                                )}
                               </Button>
                             </DialogFooter>
                           </DialogContent>
                         </Dialog>
                       </div>
-                      {salesTeam.length === 0 ? (
+                      {isLoadingSalesTeam ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                          <Loader2 className="h-8 w-8 animate-spin mb-4" />
+                          <p>Loading sales team...</p>
+                        </div>
+                      ) : salesTeamError ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                          <AlertCircle className="h-12 w-12 mx-auto mb-4 text-destructive opacity-50" />
+                          <p className="text-destructive">{salesTeamError}</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-4 gap-2"
+                            onClick={fetchSalesTeam}
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            Try Again
+                          </Button>
+                        </div>
+                      ) : salesTeam.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                           <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
                           <p>No sales team members yet</p>
@@ -462,7 +712,6 @@ export default function ProfilePage() {
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>Sales Person ID</TableHead>
                                 <TableHead>Name</TableHead>
                                 <TableHead>Email</TableHead>
                                 <TableHead>Phone</TableHead>
@@ -473,7 +722,6 @@ export default function ProfilePage() {
                             <TableBody>
                               {salesTeam.map((member) => (
                                 <TableRow key={member.id}>
-                                  <TableCell className="font-mono font-medium">{member.salesPersonId || "-"}</TableCell>
                                   <TableCell className="font-medium">{member.name}</TableCell>
                                   <TableCell>{member.email}</TableCell>
                                   <TableCell>{member.phone || "-"}</TableCell>
@@ -519,4 +767,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-

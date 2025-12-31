@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,9 +12,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { addBusiness } from "@/lib/mock-data";
-import { BusinessStatus, BusinessCategory } from "@/lib/types";
-import { logout, setStoredUser, getStoredUser } from "@/lib/auth";
+import { BusinessStatus, BusinessCategory, UserRole } from "@/lib/types";
+import { logout, setStoredUser, getStoredUser, getAuthToken } from "@/lib/auth";
 import { generateQRCodeDataUrl } from "@/lib/qr-utils";
 import { searchPlaces, getPlaceDetails, mapGoogleTypesToCategory, extractAddressComponents } from "@/lib/google-places";
 import { categorySuggestions, serviceSuggestions, getSuggestedCategories } from "@/lib/category-suggestions";
@@ -34,11 +33,15 @@ import {
   Search,
   X,
   Plus,
-  MapPin
+  MapPin,
+  QrCode,
+  AlertCircle
 } from "lucide-react";
 
-export default function SalesDashboardPage() {
+function SalesDashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const qrId = searchParams.get("qr");
   const [user, setUser] = useState(getStoredUser());
 
   useEffect(() => {
@@ -47,25 +50,25 @@ export default function SalesDashboardPage() {
       router.push("/login");
       return;
     }
-    
+
     // Redirect admin users to regular dashboard
     if (currentUser.role === "admin") {
       router.push("/dashboard");
       return;
     }
-    
+
     // Ensure user has role property
     if (!currentUser.role) {
       const updatedUser = {
         ...currentUser,
-        role: "sales-team",
+        role: "sales-team" as UserRole,
       };
       setStoredUser(updatedUser);
       setUser(updatedUser);
     } else {
       setUser(currentUser);
     }
-    
+
   }, [router]);
 
   const handleLogout = async () => {
@@ -127,7 +130,71 @@ export default function SalesDashboardPage() {
   const [paymentQRCode, setPaymentQRCode] = useState<string | null>(null);
   const [paymentTimer, setPaymentTimer] = useState(900); // 15 minutes in seconds
   const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
+  const [isOnboarding, setIsOnboarding] = useState(false);
+  const [onboardError, setOnboardError] = useState<string | null>(null);
+  const [isLoadingScanData, setIsLoadingScanData] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
 
+  // Fetch business data from scan API when QR ID is present
+  useEffect(() => {
+    const fetchScanData = async () => {
+      if (!qrId) return;
+
+      setIsLoadingScanData(true);
+      setScanError(null);
+
+      try {
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+        const authToken = getAuthToken();
+
+        const headers: HeadersInit = {
+          "Content-Type": "application/json",
+        };
+
+        if (authToken) {
+          headers["Authorization"] = `Bearer ${authToken}`;
+        }
+
+        const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/scan?qr_id=${qrId}`, {
+          method: "GET",
+          headers,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || "Failed to fetch business data");
+        }
+
+        const apiResponse = await response.json();
+        const qrData = apiResponse.data;
+
+        // Pre-populate form with fetched data
+        if (qrData) {
+          setNewBusiness((prev) => ({
+            ...prev,
+            name: qrData.business_name || prev.name,
+            email: qrData.business_contact?.email || prev.email,
+            phone: qrData.business_contact?.phone || prev.phone,
+            address: qrData.business_address?.address_line1 || prev.address,
+            city: qrData.business_address?.city || prev.city,
+            area: qrData.business_address?.area || prev.area,
+            category: (qrData.business_category as BusinessCategory) || prev.category,
+            overview: qrData.business_description || prev.overview,
+            googleBusinessReviewLink: qrData.business_google_review_url || prev.googleBusinessReviewLink,
+            // If plan exists in API response, use it
+            paymentPlan: qrData.plan || prev.paymentPlan,
+          }));
+        }
+      } catch (error: any) {
+        console.error("Error fetching scan data:", error);
+        setScanError(error.message || "Failed to load business data");
+      } finally {
+        setIsLoadingScanData(false);
+      }
+    };
+
+    fetchScanData();
+  }, [qrId]);
 
   // Payment timer countdown
   useEffect(() => {
@@ -183,11 +250,11 @@ export default function SalesDashboardPage() {
           const businessName = newBusiness.name || "New Business";
           const sessionId = `payment-${Date.now()}`;
           setPaymentSessionId(sessionId);
-          
+
           // Generate UPI payment URL (format: upi://pay?pa=merchant@upi&pn=MerchantName&am=Amount&cu=INR&tn=TransactionNote)
           // For demo, we'll use a generic payment URL
           const paymentUrl = `upi://pay?pa=tribly@pay&pn=Tribly%20QR&am=${planPrice}&cu=INR&tn=${planName}%20Subscription%20-%20${encodeURIComponent(businessName)}`;
-          
+
           const qrCode = await generateQRCodeDataUrl(paymentUrl);
           setPaymentQRCode(qrCode);
           setPaymentStatus("pending");
@@ -219,6 +286,7 @@ export default function SalesDashboardPage() {
     setShowPaymentDialog(true);
   };
 
+<<<<<<< HEAD
   // Business search handler
   useEffect(() => {
     const searchBusinesses = async () => {
@@ -304,44 +372,103 @@ export default function SalesDashboardPage() {
     }));
   };
 
-  const handleOnboardBusiness = () => {
-    if (!user) return;
-    
-    // Create business with salesTeamId
-    const businessData = {
-      ...newBusiness,
-      salesTeamId: user.id,
-      feedbackTone: "professional" as const,
-      autoReplyEnabled: false,
-    };
-    
-    addBusiness(businessData);
-    
-    // Reset form
-    setNewBusiness({
-      name: "",
-      email: "",
-      phone: "",
-      address: "",
-      city: "",
-      area: "",
-      category: "" as BusinessCategory | "",
-      overview: "",
-      googleBusinessReviewLink: "",
-      paymentPlan: "" as "qr-basic" | "qr-plus" | "",
-      status: "active" as BusinessStatus,
-      paymentExpiryDate: "",
-      paymentStatus: undefined,
-      services: [],
-    });
-    
-    setBusinessSearchQuery("");
-    setSelectedBusiness(null);
-    setSuggestedCategories([]);
-    setServiceInput("");
-    
-    // Show success message (you can add a toast notification here)
-    alert("Business onboarded successfully!");
+  const handleOnboardBusiness = async () => {
+    if (!user || !newBusiness.paymentPlan) return;
+
+    setIsOnboarding(true);
+    setOnboardError(null);
+
+    try {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+      const authToken = getAuthToken();
+
+      // Prepare payload similar to business dashboard configure_qr API
+      const payload: any = {
+        name: newBusiness.name.trim(),
+        description: newBusiness.overview?.trim() || null,
+        email: newBusiness.email.trim() || null,
+        phone: newBusiness.phone?.trim() || null,
+        category: newBusiness.category || null,
+        google_review_url: newBusiness.googleBusinessReviewLink?.trim() || null,
+        plan: newBusiness.paymentPlan, // Send plan as "qr-plus" or "qr-basic"
+      };
+
+      // Include services if provided
+      if (newBusiness.services && newBusiness.services.length > 0) {
+        payload.services = newBusiness.services;
+      }
+
+      // Include QR ID if available from URL
+      if (qrId) {
+        payload.qr_id = qrId;
+      }
+
+      // Include address if provided
+      if (newBusiness.address) {
+        payload.address = {
+          address_line1: newBusiness.address.trim(),
+          address_line2: null,
+          city: newBusiness.city?.trim() || "",
+          area: newBusiness.area?.trim() || "",
+        };
+      }
+
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+
+      if (authToken) {
+        headers["Authorization"] = `Bearer ${authToken}`;
+      }
+
+      const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/configure_qr`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.status !== "success") {
+        throw new Error(data.message || "Failed to onboard business");
+      }
+
+      // Reset form on success
+      setNewBusiness({
+        name: "",
+        email: "",
+        phone: "",
+        address: "",
+        city: "",
+        area: "",
+        category: "" as BusinessCategory | "",
+        overview: "",
+        googleBusinessReviewLink: "",
+        paymentPlan: "" as "qr-basic" | "qr-plus" | "",
+        status: "active" as BusinessStatus,
+        paymentExpiryDate: "",
+        paymentStatus: undefined,
+        services: [],
+      });
+
+      setBusinessSearchQuery("");
+      setSelectedBusiness(null);
+      setSuggestedCategories([]);
+      setServiceInput("");
+
+      // Show success message
+      alert("Business onboarded successfully!");
+
+      // If QR ID was used, redirect to business dashboard
+      if (qrId && data.data?.qr_id) {
+        router.push(`/dashboard/business/${data.data.qr_id}`);
+      }
+    } catch (error: any) {
+      console.error("Error onboarding business:", error);
+      setOnboardError(error.message || "Failed to onboard business. Please try again.");
+    } finally {
+      setIsOnboarding(false);
+    }
   };
 
 
@@ -357,6 +484,14 @@ export default function SalesDashboardPage() {
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2">Onboard Business</h1>
             <p className="text-muted-foreground">Fill in the business details to onboard a new client</p>
+            {qrId && (
+              <div className="flex items-center gap-2 mt-2">
+                <Badge variant="outline" className="gap-1.5 px-3 py-1">
+                  <QrCode className="h-3.5 w-3.5" />
+                  QR ID: <span className="font-mono font-semibold">{qrId}</span>
+                </Badge>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3">
             {user && (
@@ -385,6 +520,30 @@ export default function SalesDashboardPage() {
 
           </div>
         </div>
+
+        {/* Loading State for Scan Data */}
+        {isLoadingScanData && (
+          <Card className="mb-6">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-center gap-3 py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                <p className="text-muted-foreground">Loading business data...</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Error State for Scan Data */}
+        {scanError && !isLoadingScanData && (
+          <Card className="mb-6 border-destructive">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-md text-sm">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                {scanError}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Onboarding Form */}
         <div className="grid gap-6 mt-8">
@@ -511,6 +670,7 @@ export default function SalesDashboardPage() {
                     value={newBusiness.name}
                     onChange={(e) => setNewBusiness({ ...newBusiness, name: e.target.value })}
                     required
+                    disabled={isLoadingScanData}
                   />
                   <p className="text-xs text-muted-foreground">
                     Enter the official business name as it appears on legal documents
@@ -872,7 +1032,7 @@ export default function SalesDashboardPage() {
                   </Label>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {/* QR-Plus Plan */}
-                    <Card 
+                    <Card
                       className={`relative cursor-pointer transition-all hover:shadow-md ${
                         newBusiness.paymentPlan === "qr-plus" ? "ring-2 ring-primary" : ""
                       }`}
@@ -955,7 +1115,7 @@ export default function SalesDashboardPage() {
                     </Card>
 
                     {/* QR-Basic Plan */}
-                    <Card 
+                    <Card
                       className={`relative cursor-pointer transition-all hover:shadow-md ${
                         newBusiness.paymentPlan === "qr-basic" ? "ring-2 ring-primary" : ""
                       }`}
@@ -1071,6 +1231,18 @@ export default function SalesDashboardPage() {
             </CardContent>
           </Card>
 
+          {/* Error Display */}
+          {onboardError && (
+            <Card className="border-destructive">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-md text-sm">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  {onboardError}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Submit Button Card */}
           <Card>
             <CardContent className="pt-6">
@@ -1098,17 +1270,28 @@ export default function SalesDashboardPage() {
                     setSelectedBusiness(null);
                     setSuggestedCategories([]);
                     setServiceInput("");
+                    setOnboardError(null);
                   }}
+                  disabled={isOnboarding}
                 >
                   Clear Form
                 </Button>
                 <Button
                   onClick={handleOnboardBusiness}
-                  disabled={!newBusiness.name || !newBusiness.email || !newBusiness.category || !newBusiness.paymentPlan}
+                  disabled={!newBusiness.name || !newBusiness.email || !newBusiness.category || !newBusiness.paymentPlan || isOnboarding}
                   className="gap-2"
                 >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Create Business
+                  {isOnboarding ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      Create Business
+                    </>
+                  )}
                 </Button>
               </div>
             </CardContent>
@@ -1322,3 +1505,17 @@ export default function SalesDashboardPage() {
   );
 }
 
+export default function SalesDashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    }>
+      <SalesDashboardContent />
+    </Suspense>
+  );
+}

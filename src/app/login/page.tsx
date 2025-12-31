@@ -1,18 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { login, getStoredUser, setStoredUser } from "@/lib/auth";
+import { getStoredUser, setStoredUser, setAuthToken } from "@/lib/auth";
 import { generateBusinessSlug } from "@/lib/business-slug";
 import { getBusinessById } from "@/lib/mock-data";
 import { LogIn, Mail, Lock, AlertCircle } from "lucide-react";
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams.get("redirect");
+  const qrId = searchParams.get("qr"); // QR ID from scan flow
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -22,8 +25,28 @@ export default function LoginPage() {
     // Check if user is already logged in
     const user = getStoredUser();
     if (user) {
-      // Redirect based on user role
-      if (user.role === "business" && user.businessId) {
+      // If there's a QR ID from scan, handle based on user type
+      if (qrId) {
+        if (user.role === "sales-team" || user.userType === "sales_team") {
+          router.push(`/sales-dashboard?qr=${qrId}`);
+        } else {
+          router.push(`/dashboard/business/${qrId}`);
+        }
+        return;
+      }
+
+      // If there's a redirect URL, use it
+      if (redirectUrl) {
+        router.push(redirectUrl);
+        return;
+      }
+
+      // Otherwise, redirect based on user type
+      if (user.userType === "business_qr_user" && user.qrId) {
+        router.push(`/dashboard/business/${user.qrId}`);
+      } else if (user.userType === "admin") {
+        router.push("/dashboard");
+      } else if (user.role === "business" && user.businessId) {
         const business = getBusinessById(user.businessId);
         if (business) {
           const slug = generateBusinessSlug(business);
@@ -35,7 +58,7 @@ export default function LoginPage() {
         router.push("/dashboard");
       }
     }
-  }, [router]);
+  }, [router, redirectUrl, qrId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,25 +68,84 @@ export default function LoginPage() {
     try {
       // Trim email input
       const trimmedEmail = email.trim();
-      const result = await login(trimmedEmail, password);
-      if (result.success && result.user) {
-        setStoredUser(result.user);
-        // Redirect based on user role
-        if (result.user.role === "business" && result.user.businessId) {
-          const business = getBusinessById(result.user.businessId);
-          if (business) {
-            const slug = generateBusinessSlug(business);
-            router.push(`/dashboard/business/${slug}`);
-          } else {
-            setError("Business not found");
-          }
-        } else if (result.user.role === "sales-team") {
-          router.push("/sales-dashboard");
+
+      // Call the login API
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+      const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: trimmedEmail,
+          password: password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.status !== "success") {
+        setError(data.message || "Login failed. Please try again.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Store the token
+      if (data.data?.token) {
+        setAuthToken(data.data.token);
+      }
+
+      // Create user object from API response
+      const userData = data.data;
+
+      // Determine role based on user_type from API
+      let userRole: "admin" | "sales-team" | "business" = "business";
+      if (userData.user_type === "admin") {
+        userRole = "admin";
+      } else if (userData.user_type === "sales_team" || userData.user_type === "sales-team") {
+        userRole = "sales-team";
+      }
+
+      const user = {
+        id: userData.qr_id || `qr-user-${Date.now()}`,
+        email: trimmedEmail,
+        name: userData.name || trimmedEmail,
+        role: userRole,
+        businessId: userData.qr_id,
+        qrId: userData.qr_id,
+        userType: userData.user_type,
+      };
+
+      setStoredUser(user);
+
+      // If there's a QR ID from scan, handle based on user type
+      if (qrId) {
+        if (userRole === "sales-team") {
+          router.push(`/sales-dashboard?qr=${qrId}`);
         } else {
-          router.push("/dashboard");
+          router.push(`/dashboard/business/${qrId}`);
         }
+        return;
+      }
+
+      // If there's a redirect URL, use it
+      if (redirectUrl) {
+        router.push(redirectUrl);
+        return;
+      }
+
+      // Redirect based on user type
+      if (userRole === "sales-team") {
+        router.push("/sales-dashboard");
+      } else if (userData.user_type === "business_qr_user" && userData.qr_id) {
+        router.push(`/dashboard/business/${userData.qr_id}`);
+      } else if (userData.user_type === "admin") {
+        router.push("/dashboard");
+      } else if (userData.qr_id) {
+        // Fallback: if qr_id exists, redirect to business dashboard
+        router.push(`/dashboard/business/${userData.qr_id}`);
       } else {
-        setError(result.error || "Login failed. Please try again.");
+        router.push("/dashboard");
       }
     } catch (err) {
       console.error("Login error:", err);
@@ -154,3 +236,18 @@ export default function LoginPage() {
   );
 }
 
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8 text-center">
+            <p className="text-muted-foreground">Loading...</p>
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <LoginPageContent />
+    </Suspense>
+  );
+}
