@@ -22,10 +22,8 @@ function LoginPageContent() {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // Check if user is already logged in
     const user = getStoredUser();
     if (user) {
-      // If there's a QR ID from scan, handle based on user type
       if (qrId) {
         if (user.role === "sales-team" || user.userType === "sales_team") {
           router.push(`/sales-dashboard?qr=${qrId}`);
@@ -35,13 +33,11 @@ function LoginPageContent() {
         return;
       }
 
-      // If there's a redirect URL, use it
       if (redirectUrl) {
         router.push(redirectUrl);
         return;
       }
 
-      // Otherwise, redirect based on user type
       if (user.userType === "business_qr_user" && user.qrId) {
         router.push(`/dashboard/business/${user.qrId}`);
       } else if (user.userType === "admin") {
@@ -98,16 +94,17 @@ function LoginPageContent() {
       // Create user object from API response
       const userData = data.data;
 
-      // Determine role based on user_type from API
+      // Determine role based on user_type from API (case-insensitive)
       let userRole: "admin" | "sales-team" | "business" = "business";
-      if (userData.user_type === "admin") {
+      const apiUserType = (userData.user_type || "").toLowerCase().trim();
+      if (apiUserType === "admin") {
         userRole = "admin";
-      } else if (userData.user_type === "sales_team" || userData.user_type === "sales-team") {
+      } else if (apiUserType === "sales_team" || apiUserType === "sales-team") {
         userRole = "sales-team";
       }
 
       const user = {
-        id: userData.qr_id || `qr-user-${Date.now()}`,
+        id: userData.user_id || userData.qr_id || `qr-user-${Date.now()}`,
         email: trimmedEmail,
         name: userData.name || trimmedEmail,
         role: userRole,

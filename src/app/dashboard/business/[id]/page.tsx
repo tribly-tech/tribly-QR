@@ -17,13 +17,11 @@ import { mockBusinesses, getReviewsByBusinessId } from "@/lib/mock-data";
 import { Business, BusinessCategory, ReviewCategory, Review } from "@/lib/types";
 import { generateShortUrlCode, generateReviewUrl, generateQRCodeDataUrl, downloadQRCodeAsPNG } from "@/lib/qr-utils";
 import { getBusinessBySlug } from "@/lib/business-slug";
-<<<<<<< HEAD
-import { getStoredUser, logout, setStoredUser } from "@/lib/auth";
-import { categorySuggestions, serviceSuggestions } from "@/lib/category-suggestions";
-=======
 import { getStoredUser, logout, setStoredUser, getAuthToken } from "@/lib/auth";
->>>>>>> 531769506c43ac79f765ec54d740ace929163b90
+import { categorySuggestions, serviceSuggestions } from "@/lib/category-suggestions";
 import { Toast } from "@/components/ui/toast";
+import { OverviewTab } from "@/components/dashboard/business/OverviewTab";
+import { KeywordsTab } from "@/components/dashboard/business/KeywordsTab";
 import {
   ArrowLeft,
   Upload,
@@ -71,13 +69,10 @@ import {
   FileImage,
   CheckCircle,
   AlertTriangle,
-<<<<<<< HEAD
   Plus,
   X,
-=======
   Trash2,
   Pencil,
->>>>>>> 531769506c43ac79f765ec54d740ace929163b90
 } from "lucide-react";
 
 export default function BusinessDetailPage() {
@@ -600,14 +595,14 @@ export default function BusinessDetailPage() {
     if (newService.trim() && business) {
       const trimmedService = newService.trim();
       const currentServices = business.services || [];
-      
+
       // Check if service already exists (case-insensitive)
       if (currentServices.some(s => s.toLowerCase() === trimmedService.toLowerCase())) {
         setToastMessage("Service already exists");
         setShowToast(true);
         return;
       }
-      
+
       handleUpdateBusiness({
         services: [...currentServices, trimmedService]
       });
@@ -633,7 +628,7 @@ export default function BusinessDetailPage() {
   // Enhanced add service handler
   const handleAddServiceEnhanced = (service: string) => {
     if (!business) return;
-    
+
     if (service.trim() && !business.services?.includes(service.trim())) {
       const currentServices = business.services || [];
       handleUpdateBusiness({
@@ -660,15 +655,15 @@ export default function BusinessDetailPage() {
   // Generate service suggestions based on previous services from other businesses in the same category
   const suggestedServices = useMemo(() => {
     if (!business) return [];
-    
+
     const currentServices = business.services || [];
     const suggestions: string[] = [];
-    
+
     // Get all services from other businesses in the same category
     const otherBusinesses = mockBusinesses.filter(
       b => b.id !== business.id && b.category === business.category && b.services && b.services.length > 0
     );
-    
+
     // Collect all unique services from other businesses
     const serviceFrequency = new Map<string, number>();
     otherBusinesses.forEach(b => {
@@ -677,7 +672,7 @@ export default function BusinessDetailPage() {
         serviceFrequency.set(normalizedService, (serviceFrequency.get(normalizedService) || 0) + 1);
       });
     });
-    
+
     // Sort by frequency and add to suggestions
     const sortedServices = Array.from(serviceFrequency.entries())
       .sort((a, b) => b[1] - a[1])
@@ -688,12 +683,12 @@ export default function BusinessDetailPage() {
           .find(s => s.toLowerCase() === service);
         return originalService || service;
       })
-      .filter(service => 
+      .filter(service =>
         !currentServices.some(s => s.toLowerCase() === service.toLowerCase())
       );
-    
+
     suggestions.push(...sortedServices);
-    
+
     // Add category-based default suggestions if no other businesses have services
     if (suggestions.length === 0) {
       const categoryServices: Record<string, string[]> = {
@@ -708,12 +703,12 @@ export default function BusinessDetailPage() {
         hospitality: ["Room Booking", "Event Venue", "Catering", "Concierge Services", "Airport Shuttle"],
         other: ["Consultation", "Custom Services", "Support", "Maintenance"]
       };
-      
+
       if (business.category && categoryServices[business.category]) {
         suggestions.push(...categoryServices[business.category]);
       }
     }
-    
+
     return suggestions;
   }, [business]);
 
@@ -1200,380 +1195,22 @@ export default function BusinessDetailPage() {
           <div className="flex-1 min-w-0">
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6 mt-0">
-            {/* Basic Information Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Basic Information</CardTitle>
-                <CardDescription>
-                  Enter the essential details about the business
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="name">
-                      Business Name <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      id="name"
-                      placeholder="e.g., The Coffee House"
-                      value={business?.name || ""}
-                      onChange={(e) => handleUpdateBusiness({ name: e.target.value })}
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Enter the official business name as it appears on legal documents
-                    </p>
-                  </div>
-                  
-                  {/* Dotted Separator */}
-                  <div className="relative my-2">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-dotted border-muted-foreground/30"></div>
-                    </div>
-                  </div>
-<<<<<<< HEAD
-                  
-                  <div className="grid gap-2">
-                    <Label htmlFor="category">
-                      Business Category <span className="text-destructive">*</span>
-                    </Label>
-=======
-                  <div className="space-y-2">
-                    <Label>Phone</Label>
-                    <Input
-                      value={business.phone || ""}
-                      onChange={(e) => handleUpdateBusiness({ phone: e.target.value })}
-                      placeholder="+1 (555) 123-4567"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Website</Label>
-                    <Input
-                      type="url"
-                      value={website}
-                      onChange={(e) => setWebsite(e.target.value)}
-                      placeholder="https://www.example.com"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Category</Label>
->>>>>>> 531769506c43ac79f765ec54d740ace929163b90
-                    <Select
-                      value={business?.category || ""}
-                      onValueChange={(value) => {
-                        handleUpdateBusiness({ category: value as BusinessCategory });
-                        setServiceInput("");
-                      }}
-                    >
-                      <SelectTrigger id="category">
-                        <SelectValue placeholder="Select business category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="restaurant">Restaurant</SelectItem>
-                        <SelectItem value="retail">Retail</SelectItem>
-                        <SelectItem value="healthcare">Healthcare</SelectItem>
-                        <SelectItem value="beauty">Beauty</SelectItem>
-                        <SelectItem value="fitness">Fitness</SelectItem>
-                        <SelectItem value="automotive">Automotive</SelectItem>
-                        <SelectItem value="real-estate">Real Estate</SelectItem>
-                        <SelectItem value="education">Education</SelectItem>
-                        <SelectItem value="hospitality">Hospitality</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    
-                    {/* Category Suggestions */}
-                    {suggestedCategories.length > 0 && !business?.category && (
-                      <div className="mt-2">
-                        <p className="text-xs text-muted-foreground mb-2">Suggested categories:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {suggestedCategories.map((cat) => (
-                            <Badge
-                              key={cat}
-                              variant="outline"
-                              className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                              onClick={() => handleUpdateBusiness({ category: cat })}
-                            >
-                              {cat.split("-").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ")}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Category-specific suggestions */}
-                    {business?.category && categorySuggestions[business.category] && (
-                      <div className="mt-2">
-                        <p className="text-xs text-muted-foreground mb-2">
-                          Common types for {business.category}:
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {categorySuggestions[business.category].slice(0, 5).map((suggestion) => (
-                            <Badge
-                              key={suggestion}
-                              variant="secondary"
-                              className="text-xs"
-                            >
-                              {suggestion}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <p className="text-xs text-muted-foreground">
-                      Select the primary category that best describes the business
-                    </p>
-                  </div>
-                  
-                  {/* Dotted Separator */}
-                  <div className="relative my-2">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-dotted border-muted-foreground/30"></div>
-                    </div>
-                  </div>
-                  
-                  {/* Services Section */}
-                  <div className="grid gap-2">
-                    <Label htmlFor="services">Business Services</Label>
-                    <div className="relative service-input-container">
-                      <Input
-                        id="services"
-                        placeholder={business?.category ? `Add a service (e.g., ${getServiceSuggestions[0] || "Service name"})` : "Select a category first to see suggestions"}
-                        value={serviceInput}
-                        onChange={(e) => {
-                          setServiceInput(e.target.value);
-                          setShowServiceSuggestions(e.target.value.length > 0 && getServiceSuggestions.length > 0);
-                        }}
-                        onFocus={() => {
-                          if (getServiceSuggestions.length > 0) {
-                            setShowServiceSuggestions(true);
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && serviceInput.trim()) {
-                            e.preventDefault();
-                            handleAddServiceEnhanced(serviceInput);
-                          }
-                        }}
-                        disabled={!business?.category}
-                      />
-                      
-                      {/* Service Suggestions Dropdown */}
-                      {showServiceSuggestions && getServiceSuggestions.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-auto top-full service-suggestions-dropdown">
-                          {getServiceSuggestions
-                            .filter((suggestion) =>
-                              suggestion.toLowerCase().includes(serviceInput.toLowerCase())
-                            )
-                            .map((suggestion) => (
-                              <div
-                                key={suggestion}
-                                className="p-2 hover:bg-muted cursor-pointer border-b last:border-b-0"
-                                onClick={() => handleAddServiceEnhanced(suggestion)}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <Plus className="h-4 w-4 text-muted-foreground" />
-                                  <span className="text-sm">{suggestion}</span>
-                                </div>
-                              </div>
-                            ))}
-                          {serviceInput.trim() && !getServiceSuggestions.some(s => s.toLowerCase() === serviceInput.toLowerCase()) && (
-                            <div
-                              className="p-2 hover:bg-muted cursor-pointer border-t"
-                              onClick={() => handleAddServiceEnhanced(serviceInput)}
-                            >
-                              <div className="flex items-center gap-2">
-                                <Plus className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm">Add "{serviceInput}"</span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* Service Suggestions */}
-                    {business?.category && getServiceSuggestions.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs text-muted-foreground mb-2">Suggested business services:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {getServiceSuggestions.slice(0, 8).map((suggestion) => (
-                            <Badge
-                              key={suggestion}
-                              variant="outline"
-                              className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                              onClick={() => handleAddServiceEnhanced(suggestion)}
-                            >
-                              <Plus className="h-3 w-3 mr-1" />
-                              {suggestion}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Added Services */}
-                    {business?.services && business.services.length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-xs text-muted-foreground mb-2">Added business services:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {business.services.map((service) => (
-                            <Badge
-                              key={service}
-                              variant="default"
-                              className="cursor-pointer"
-                              onClick={() => handleRemoveService(service)}
-                            >
-                              {service}
-                              <X className="h-3 w-3 ml-1" />
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <p className="text-xs text-muted-foreground">
-                      {business?.category
-                        ? "Click on suggested business services or type to add custom services"
-                        : "Select a business category first to see business service suggestions"}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Business Overview Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Business Overview</CardTitle>
-                <CardDescription>
-                  Provide a brief description of the business
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="overview">Business Overview</Label>
-                    <Textarea
-                      id="overview"
-                      placeholder="Describe the business, its services, specialties, and what makes it unique..."
-                      value={business?.overview || ""}
-                      onChange={(e) => handleUpdateBusiness({ overview: e.target.value })}
-                      className="min-h-[120px] resize-none"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      A brief description of the business that will be displayed on the business profile
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Contact Information Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Contact Information</CardTitle>
-                <CardDescription>
-                  Provide contact details for the business
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="email">
-                      Business Email <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="contact@business.com"
-                      value={business?.email || ""}
-                      onChange={(e) => handleUpdateBusiness({ email: e.target.value })}
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Primary email address for business communications
-                    </p>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      placeholder="+91 98765 43210"
-                      value={business?.phone || ""}
-                      onChange={(e) => handleUpdateBusiness({ phone: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Include country code (e.g., +91 for India)
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Location Information Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Location Information</CardTitle>
-                <CardDescription>
-                  Enter the physical location of the business
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="address">Street Address</Label>
-                    <Input
-                      id="address"
-                      placeholder="123 Main Street, Building Name"
-                      value={business?.address || ""}
-                      onChange={(e) => handleUpdateBusiness({ address: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Complete street address including building number and name
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="city">City</Label>
-                      <Input
-                        id="city"
-                        placeholder="Mumbai"
-                        value={business?.city || ""}
-                        onChange={(e) => handleUpdateBusiness({ city: e.target.value })}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="area">Area / Locality</Label>
-                      <Input
-                        id="area"
-                        placeholder="Bandra"
-                        value={business?.area || ""}
-                        onChange={(e) => handleUpdateBusiness({ area: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Save Button */}
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex justify-end">
-                  <Button
-                    onClick={() => handleSaveChanges("Business information")}
-                    className="gap-2"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Save Changes
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <OverviewTab
+              business={business}
+              handleUpdateBusiness={handleUpdateBusiness}
+              handleSaveChanges={handleSaveChanges}
+              website={website}
+              setWebsite={setWebsite}
+              suggestedCategories={suggestedCategories}
+              categorySuggestions={categorySuggestions}
+              serviceInput={serviceInput}
+              setServiceInput={setServiceInput}
+              showServiceSuggestions={showServiceSuggestions}
+              setShowServiceSuggestions={setShowServiceSuggestions}
+              getServiceSuggestions={getServiceSuggestions}
+              handleAddServiceEnhanced={handleAddServiceEnhanced}
+              handleRemoveService={handleRemoveService}
+            />
           </TabsContent>
 
           {/* GMB Health Tab */}
@@ -2145,133 +1782,20 @@ export default function BusinessDetailPage() {
 
           {/* Keywords Tab */}
           <TabsContent value="keywords" className="space-y-6 mt-0">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Hash className="h-5 w-5" />
-                  SEO Keywords
-                </CardTitle>
-                <CardDescription>
-                  Add keywords to boost your business page SEO and improve search visibility
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  {business?.keywords && business.keywords.length > 0 ? (
-                    <div className="space-y-3">
-                      <Label>Current Keywords ({business.keywords.length})</Label>
-                      <div className="flex flex-wrap gap-2">
-                        {business.keywords.map((keyword, index) => (
-                          <Badge
-                            key={index}
-                            variant="secondary"
-                            className="flex items-center gap-2 px-3 py-1.5 text-sm"
-                          >
-                            <Hash className="h-3 w-3" />
-                            {keyword}
-                            <button
-                              onClick={() => handleRemoveKeyword(keyword)}
-                              className="ml-1 hover:bg-destructive/20 rounded-full p-0.5 transition-colors"
-                              aria-label={`Remove ${keyword}`}
-                            >
-                              <XIcon className="h-3 w-3" />
-                            </button>
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Hash className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No keywords added yet</p>
-                      <p className="text-sm mt-2">Add keywords to improve your SEO</p>
-                    </div>
-                  )}
-
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Enter a keyword (e.g., coffee shop, restaurant, best cafe)"
-                      value={newKeyword}
-                      onChange={(e) => setNewKeyword(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          handleAddKeyword();
-                        }
-                      }}
-                      className="flex-1"
-                    />
-                    <Button onClick={handleAddKeyword} disabled={!newKeyword.trim()}>
-                      <PlusIcon className="h-4 w-4 mr-2" />
-                      Add Keyword
-                    </Button>
-                  </div>
-
-                  {/* Suggested Keywords */}
-                  {suggestedKeywords.length > 0 && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium">Suggested Keywords</Label>
-                        {suggestedKeywords.length > suggestionsLimit && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSuggestionsLimit(prev => prev + 12)}
-                            className="text-xs text-primary hover:text-primary/80"
-                          >
-                            Suggest more
-                          </Button>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {displayedSuggestions.map((keyword, index) => (
-                          <Badge
-                            key={index}
-                            variant="outline"
-                            className="cursor-pointer hover:bg-primary/10 hover:border-primary transition-colors px-3 py-1.5"
-                            onClick={async () => {
-                              setNewKeyword(keyword);
-                              // Auto-add on click
-                              const trimmedKeyword = keyword.trim();
-                              if (business) {
-                                const currentKeywords = business.keywords || [];
-                                if (!currentKeywords.some(k => k.toLowerCase() === trimmedKeyword.toLowerCase())) {
-                                  const updatedKeywords = [...currentKeywords, trimmedKeyword];
-                                  handleUpdateBusiness({
-                                    keywords: updatedKeywords
-                                  });
-                                  // Send keywords to API
-                                  await sendKeywordsToAPI(updatedKeywords);
-                                }
-                              }
-                            }}
-                          >
-                            <Hash className="h-3 w-3 mr-1" />
-                            {keyword}
-                            <PlusIcon className="h-3 w-3 ml-1" />
-                          </Badge>
-                        ))}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Click on any suggested keyword to add it instantly
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-4 border-t">
-                  <div className="flex justify-end">
-                    <Button
-                      onClick={() => handleSaveChanges("Keywords")}
-                      className="gap-2"
-                    >
-                      <CheckCircle2 className="h-4 w-4" />
-                      Save Keywords
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <KeywordsTab
+              business={business}
+              newKeyword={newKeyword}
+              setNewKeyword={setNewKeyword}
+              handleAddKeyword={handleAddKeyword}
+              handleRemoveKeyword={handleRemoveKeyword}
+              handleUpdateBusiness={handleUpdateBusiness}
+              sendKeywordsToAPI={sendKeywordsToAPI}
+              handleSaveChanges={handleSaveChanges}
+              suggestedKeywords={suggestedKeywords}
+              suggestionsLimit={suggestionsLimit}
+              setSuggestionsLimit={setSuggestionsLimit}
+              displayedSuggestions={displayedSuggestions}
+            />
           </TabsContent>
 
           {/* Links & QR Tab */}

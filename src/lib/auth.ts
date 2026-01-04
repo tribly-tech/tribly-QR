@@ -96,6 +96,10 @@ export async function logout(): Promise<void> {
   // Clear token and user data
   setAuthToken(null);
   setStoredUser(null);
+  // Clear legacy mock data if present
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("tribly_sales_team");
+  }
 }
 
 export function getStoredUser(): User | null {
@@ -136,25 +140,18 @@ export function setAuthToken(token: string | null): void {
   }
 }
 
-// Sales Team Management (localStorage - for backwards compatibility)
-// Note: Sales team is now primarily managed via API in the profile page
+// Sales Team Management (localStorage - DEPRECATED/REMOVED)
+// Sales team is now managed via API.
 export function getSalesTeam(): User[] {
-  if (typeof window === "undefined") return [];
-  const stored = localStorage.getItem("tribly_sales_team");
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch {
-      return [];
-    }
-  }
-  // Return empty array - no auto-creation of test data
+  // Always return empty array to prevent using fake data
   return [];
 }
 
 export function setSalesTeam(team: User[]): void {
+  // No-op
   if (typeof window === "undefined") return;
-  localStorage.setItem("tribly_sales_team", JSON.stringify(team));
+  // Clear any existing fake data
+  localStorage.removeItem("tribly_sales_team");
 }
 
 export function addSalesTeamMember(member: Omit<User, "id" | "createdAt" | "salesPersonId">): User {

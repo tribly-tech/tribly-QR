@@ -41,6 +41,8 @@ export const viewport: Viewport = {
   maximumScale: 1,
 };
 
+import { LegacyCleanup } from "@/components/LegacyCleanup";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -48,7 +50,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={clashGrotesk.variable}>
-      <body className={clashGrotesk.className}>{children}</body>
+      <body className={clashGrotesk.className}>
+        <LegacyCleanup />
+        {children}
+      </body>
     </html>
   );
 }

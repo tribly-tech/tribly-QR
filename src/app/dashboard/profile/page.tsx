@@ -39,7 +39,8 @@ import {
   EyeOff,
   AlertCircle,
   RefreshCw,
-  Lock
+  Lock,
+  Building2
 } from "lucide-react";
 import { DialogClose } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -143,10 +144,23 @@ export default function ProfilePage() {
 
     // Ensure user has role property (migration for existing users)
     if (!currentUser.role) {
-      // Default to admin for existing admin@tribly.com users
+      let role: UserRole = "business"; // Default fallback
+
+      // Check userType first
+      const userType = (currentUser.userType || "").toLowerCase().trim();
+      if (userType === "admin") {
+        role = "admin";
+      } else if (userType === "business_qr_user") {
+        role = "business";
+      }
+      // Then check email
+      else if (currentUser.email === "admin@tribly.com" || currentUser.email === "admin@tribly.ai") {
+        role = "admin";
+      }
+
       const updatedUser = {
         ...currentUser,
-        role: (currentUser.email === "admin@tribly.com" ? "admin" : "sales-team") as UserRole,
+        role: role,
       };
       setStoredUser(updatedUser);
       setUser(updatedUser);
@@ -310,18 +324,34 @@ export default function ProfilePage() {
 
 
   const getRoleBadge = (role?: UserRole) => {
-    const userRole = role || (user?.email === "admin@tribly.com" ? "admin" : "sales-team");
-    return userRole === "admin" ? (
-      <Badge className="bg-purple-100 text-purple-700 border-purple-300">
-        <Shield className="h-3 w-3 mr-1" />
-        Admin
-      </Badge>
-    ) : (
-      <Badge className="bg-blue-100 text-blue-700 border-blue-300">
-        <Users className="h-3 w-3 mr-1" />
-        Sales Team
-      </Badge>
+    const userRole = role || (
+      (user?.email === "admin@tribly.com" || user?.email === "admin@tribly.ai" || user?.userType === "admin")
+        ? "admin"
+        : "sales-team"
     );
+
+    if (userRole === "admin") {
+      return (
+        <Badge className="bg-purple-100 text-purple-700 border-purple-300">
+          <Shield className="h-3 w-3 mr-1" />
+          Admin
+        </Badge>
+      );
+    } else if (userRole === "business") {
+      return (
+        <Badge variant="outline">
+          <Building2 className="h-3 w-3 mr-1" />
+          Business
+        </Badge>
+      );
+    } else {
+      return (
+        <Badge className="bg-blue-100 text-blue-700 border-blue-300">
+          <Users className="h-3 w-3 mr-1" />
+          Sales Team
+        </Badge>
+      );
+    }
   };
 
   if (!user) {
@@ -329,7 +359,7 @@ export default function ProfilePage() {
   }
 
   // Check if user is admin (with fallback for email-based check)
-  const isAdmin = user.role === "admin" || (!user.role && user.email === "admin@tribly.com");
+  const isAdmin = user.role === "admin" || (!user.role && (user.email === "admin@tribly.com" || user.email === "admin@tribly.ai"));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF]">

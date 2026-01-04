@@ -17,7 +17,7 @@ import { logout, setStoredUser, getStoredUser, getAuthToken } from "@/lib/auth";
 import { generateQRCodeDataUrl } from "@/lib/qr-utils";
 import { searchPlaces, getPlaceDetails, mapGoogleTypesToCategory, extractAddressComponents } from "@/lib/google-places";
 import { categorySuggestions, serviceSuggestions, getSuggestedCategories } from "@/lib/category-suggestions";
-import { 
+import {
   LogOut,
   ChevronDown,
   CheckCircle2,
@@ -59,10 +59,32 @@ function SalesDashboardContent() {
 
     // Ensure user has role property
     if (!currentUser.role) {
+      let role: UserRole = "business"; // Default fallback
+
+      // Check userType first
+      const userType = (currentUser.userType || "").toLowerCase().trim();
+      if (userType === "admin") {
+        role = "admin";
+      } else if (userType === "business_qr_user") {
+        role = "business";
+      }
+      // Then check email
+      else if (currentUser.email === "admin@tribly.com" || currentUser.email === "admin@tribly.ai") {
+        role = "admin";
+      }
+
       const updatedUser = {
         ...currentUser,
-        role: "sales-team" as UserRole,
+        role: role,
       };
+
+      // If determined as admin, redirect immediately without saving incorrect role
+      if (role === "admin") {
+        setStoredUser(updatedUser);
+        router.push("/dashboard");
+        return;
+      }
+
       setStoredUser(updatedUser);
       setUser(updatedUser);
     } else {
@@ -286,7 +308,7 @@ function SalesDashboardContent() {
     setShowPaymentDialog(true);
   };
 
-<<<<<<< HEAD
+
   // Business search handler
   useEffect(() => {
     const searchBusinesses = async () => {
@@ -323,7 +345,7 @@ function SalesDashboardContent() {
         const addressComponents = extractAddressComponents(details);
         const category = mapGoogleTypesToCategory(details.types || []);
         const suggestedCats = getSuggestedCategories(description);
-        
+
         setSelectedBusiness(details);
         setNewBusiness((prev) => ({
           ...prev,
@@ -589,7 +611,7 @@ function SalesDashboardContent() {
                       <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
                     )}
                   </div>
-                  
+
                   {/* Search Results Dropdown */}
                   {showSearchResults && businessSearchResults.length > 0 && !selectedBusiness && (
                     <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto top-full search-results-dropdown">
@@ -676,14 +698,14 @@ function SalesDashboardContent() {
                     Enter the official business name as it appears on legal documents
                   </p>
                 </div>
-                
+
                 {/* Dotted Separator */}
                 <div className="relative my-2">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-dotted border-muted-foreground/30"></div>
                   </div>
                 </div>
-                
+
                 <div className="grid gap-2">
                   <Label htmlFor="category">
                     Business Category <span className="text-destructive">*</span>
@@ -711,7 +733,7 @@ function SalesDashboardContent() {
                       <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
-                  
+
                   {/* Category Suggestions */}
                   {suggestedCategories.length > 0 && !newBusiness.category && (
                     <div className="mt-2">
@@ -755,14 +777,14 @@ function SalesDashboardContent() {
                     Select the primary category that best describes the business
                   </p>
                 </div>
-                
+
                 {/* Dotted Separator */}
                 <div className="relative my-2">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-dotted border-muted-foreground/30"></div>
                   </div>
                 </div>
-                
+
                 {/* Services Section */}
                 <div className="grid gap-2">
                   <Label htmlFor="services">Business Services</Label>
@@ -788,7 +810,7 @@ function SalesDashboardContent() {
                       }}
                       disabled={!newBusiness.category}
                     />
-                    
+
                     {/* Service Suggestions Dropdown */}
                     {showServiceSuggestions && getServiceSuggestions.length > 0 && (
                       <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-auto top-full service-suggestions-dropdown">
@@ -822,7 +844,7 @@ function SalesDashboardContent() {
                       </div>
                     )}
                   </div>
-                  
+
                   {/* Service Suggestions */}
                   {newBusiness.category && getServiceSuggestions.length > 0 && (
                     <div className="mt-2">

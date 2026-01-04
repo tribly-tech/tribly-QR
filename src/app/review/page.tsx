@@ -64,14 +64,12 @@ function ReviewPageContent() {
       if (code) params.set("code", code);
       if (qrId) params.set("qr", qrId);
       const feedbackUrl = `/feedback?${params.toString()}`;
-      console.log("Navigating to feedback:", feedbackUrl);
       router.push(feedbackUrl);
     } else {
       const params = new URLSearchParams();
       if (code) params.set("code", code);
       if (qrId) params.set("qr", qrId);
       const manualFeedbackUrl = `/manual-feedback${params.toString() ? `?${params.toString()}` : ""}`;
-      console.log("Navigating to manual feedback:", manualFeedbackUrl);
       router.push(manualFeedbackUrl);
     }
   };

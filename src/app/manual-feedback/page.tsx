@@ -24,16 +24,12 @@ function ManualFeedbackPageContent() {
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
 
-    console.log("handleSubmit called", { feedback, name, contactInfo, qrId });
-
     if (!feedback.trim() || !name.trim() || !contactInfo.trim()) {
-      console.log("Validation failed: missing required fields");
       return;
     }
 
     if (!qrId) {
       setError("QR ID is missing. Please scan the QR code again.");
-      console.log("Validation failed: missing qrId");
       return;
     }
 
@@ -49,8 +45,6 @@ function ManualFeedbackPageContent() {
         feedback: feedback.trim(),
       };
 
-      console.log("Calling API:", `${apiBaseUrl}/dashboard/v1/business_qr/capture_manual_review`, requestBody);
-
       const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/capture_manual_review`, {
         method: "POST",
         headers: {
@@ -58,8 +52,6 @@ function ManualFeedbackPageContent() {
         },
         body: JSON.stringify(requestBody),
       });
-
-      console.log("API Response status:", response.status);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));

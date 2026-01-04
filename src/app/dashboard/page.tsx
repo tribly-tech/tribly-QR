@@ -11,7 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { mockBusinesses } from "@/lib/mock-data";
 import { Business, BusinessStatus, BusinessCategory, UserRole } from "@/lib/types";
-import { logout, setStoredUser, getStoredUser, getSalesTeam, getAuthToken } from "@/lib/auth";
+import { logout, setStoredUser, getStoredUser, getAuthToken } from "@/lib/auth";
 import {
   Building2,
   CheckCircle2,
@@ -47,6 +47,12 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchOnboardedBusinesses = async () => {
       const currentUser = getStoredUser();
+
+    // Proactively remove legacy fake data if it exists
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("tribly_sales_team");
+    }
+
       if (!currentUser) return;
 
       // Only fetch for admin users
@@ -86,10 +92,9 @@ export default function DashboardPage() {
 
         // Map API response to Business type
         const mappedBusinesses: Business[] = data.data.map((business: any) => {
-          // Find sales team member by name to get their ID
-          const salesTeam = getSalesTeam();
-          const salesTeamMember = salesTeam.find(m => m.name === business.onboarded_by);
-          const salesTeamId = salesTeamMember?.id;
+          // Sales Team ID logic is deprecated as we don't rely on local storage anymore.
+          // In the future this should come from the API if needed.
+          const salesTeamId = undefined;
 
           // Map category from API response, validate it's a valid BusinessCategory
           const validCategories: BusinessCategory[] = [
@@ -142,11 +147,25 @@ export default function DashboardPage() {
     if (currentUser) {
       // Ensure user has role property (migration for existing users)
       if (!currentUser.role) {
-        // Default to admin for existing admin@tribly.com users
+        let role: UserRole = "business"; // Default fallback
+
+        // Check userType first
+        const userType = (currentUser.userType || "").toLowerCase().trim();
+        if (userType === "admin") {
+          role = "admin";
+        } else if (userType === "business_qr_user") {
+          role = "business";
+        }
+        // Then check email
+        else if (currentUser.email === "admin@tribly.com" || currentUser.email === "admin@tribly.ai") {
+          role = "admin";
+        }
+
         const updatedUser = {
           ...currentUser,
-          role: (currentUser.email === "admin@tribly.com" ? "admin" : "sales-team") as UserRole,
+          role: role,
         };
+
         setStoredUser(updatedUser);
         setUser(updatedUser);
       } else {
@@ -220,10 +239,9 @@ export default function DashboardPage() {
     }
   }, [cityFilter, availableBusinesses]);
 
-  // Get sales team for filter
-  const salesTeam = useMemo(() => {
-    return getSalesTeam();
-  }, []);
+  // Get sales team for filter - Mock/Local storage deprecated
+  // In a real implementation, valid sales team members would come from an API if needed.
+  const salesTeam: any[] = [];
 
   // Get unique onboarded_by values for filter
   const uniqueOnboardedBy = useMemo(() => {
@@ -238,9 +256,9 @@ export default function DashboardPage() {
 
   // Helper function to get sales team member name by ID
   const getSalesTeamMemberName = (salesTeamId?: string): string => {
-    if (!salesTeamId) return "Admin";
-    const member = salesTeam.find(m => m.id === salesTeamId);
-    return member ? member.name : "Unknown";
+    // If we have the name stored directly, we could use it, but here we just return a placeholder
+    // since we removed the local storage look up.
+    return "Sales Agent";
   };
 
   const filteredBusinesses = useMemo(() => {
