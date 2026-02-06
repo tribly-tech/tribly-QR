@@ -515,7 +515,7 @@ export default function BusinessDetailPage() {
         phone: business.phone || null,
         category: business.category || null,
         google_review_url: business.googleBusinessReviewLink || null,
-        qr_id: businessSlug,
+        business_id: businessSlug,
         tags: keywords, // Send keywords as tags array
       };
 
@@ -857,7 +857,7 @@ export default function BusinessDetailPage() {
           phone: business.phone || null,
           category: business.category || null,
           google_review_url: business.googleBusinessReviewLink || null,
-          qr_id: businessSlug,
+          business_id: businessSlug,
         };
 
         // Include tags (keywords) when saving keywords section
