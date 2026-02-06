@@ -15,3 +15,6 @@ export {
 
 export { Switch } from "./switch";
 
+export { TypingAnimation } from "./typing-animation";
+export { FAQAccordion } from "./faq-accordion";
+export { ChevronIcon } from "./chevron-icon";
