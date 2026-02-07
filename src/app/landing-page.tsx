@@ -79,6 +79,10 @@ export default function LandingPage() {
   const [isSearchOverlayOpen, setIsSearchOverlayOpen] = useState(false);
   const [searchOverlayEntered, setSearchOverlayEntered] = useState(false);
   const [searchOverlayExiting, setSearchOverlayExiting] = useState(false);
+  /** Step in search overlay: 'search' = business name, 'contact' = WhatsApp/email to send report */
+  const [reportStep, setReportStep] = useState<"search" | "contact">("search");
+  const [reportWhatsApp, setReportWhatsApp] = useState("");
+  const [reportEmail, setReportEmail] = useState("");
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const searchAnchorRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLUListElement>(null);
@@ -157,6 +161,7 @@ export default function LandingPage() {
     }
     setSearchOverlayExiting(false);
     setSearchOverlayEntered(false);
+    setReportStep("search");
     setIsSearchOverlayOpen(true);
   };
 
@@ -167,7 +172,33 @@ export default function LandingPage() {
       setIsSearchOverlayOpen(false);
       setSearchOverlayExiting(false);
       setSearchOverlayEntered(false);
+      setReportStep("search");
+      setReportWhatsApp("");
+      setReportEmail("");
     }, 280);
+  };
+
+  const handleGetReportClick = () => {
+    if (!searchValue.trim()) return;
+    setReportStep("contact");
+  };
+
+  const handleSendReportSubmit = () => {
+    const phone = reportWhatsApp.trim();
+    const email = reportEmail.trim();
+    if (!phone && !email) return;
+    sessionStorage.setItem(
+      "reportContactDetails",
+      JSON.stringify({
+        businessName: searchValue.trim(),
+        whatsappPhone: phone,
+        email,
+      })
+    );
+    closeSearchOverlay();
+    router.push(
+      `/sales-dashboard?business=${encodeURIComponent(searchValue.trim())}`
+    );
   };
 
   useEffect(() => {
@@ -232,7 +263,7 @@ export default function LandingPage() {
                 <ChevronIcon className="w-6 h-6" />
               </button>
               <button
-                onClick={() => router.replace("/login")}
+                onClick={() => router.push("/login")}
                 className="flex items-center justify-center gap-2 px-6 py-2 bg-[#f7f1ff] border border-[#9747ff] rounded-full text-[#9747ff] text-[15.1px] font-medium leading-[26px] h-12 hover:bg-[#9747ff] hover:text-white transition-colors"
               >
                 Login to tribly
@@ -242,18 +273,18 @@ export default function LandingPage() {
           </div>
           {/* Mobile Navigation Menu */}
           {isMenuOpen && (
-            <div className="md:hidden mt-4 w-full bg-white/40 backdrop-blur-xl rounded-full shadow-[0px_4px_0px_0px_rgba(151,71,255,0.32)] border border-white/20 px-6 py-4 bg-gradient-to-b from-white/60 to-white/20">
-              <div className="flex flex-col gap-3">
+            <div className="md:hidden mt-4 w-full bg-white/40 backdrop-blur-xl rounded-[40px] shadow-[0px_4px_0px_0px_rgba(151,71,255,0.32)] border border-white/20 px-6 py-6 bg-gradient-to-b from-white/60 to-white/20">
+              <div className="flex flex-col gap-3 items-start">
                 <button
                   onClick={openContactModal}
-                  className="flex items-center justify-center gap-2 px-6 py-2 bg-[#f7f1ff] border border-[#9747ff] rounded-full text-[#9747ff] text-[15.1px] font-medium leading-[26px] h-12 hover:bg-[#9747ff] hover:text-white transition-colors"
+                  className="flex items-center justify-center gap-2 px-6 py-2 bg-[#f7f1ff] border border-[#9747ff] rounded-full text-[#9747ff] text-[15.1px] font-medium leading-[26px] h-12 w-fit hover:bg-[#9747ff] hover:text-white transition-colors"
                 >
                   Talk to expert for free
                   <ChevronIcon className="w-6 h-6" />
                 </button>
                 <button
-                  onClick={() => router.replace("/login")}
-                  className="flex items-center justify-center gap-2 px-6 py-2 bg-[#f7f1ff] border border-[#9747ff] rounded-full text-[#9747ff] text-[15.1px] font-medium leading-[26px] h-12 hover:bg-[#9747ff] hover:text-white transition-colors"
+                  onClick={() => router.push("/login")}
+                  className="flex items-center justify-center gap-2 px-6 py-2 bg-[#f7f1ff] border border-[#9747ff] rounded-full text-[#9747ff] text-[15.1px] font-medium leading-[26px] h-12 w-fit hover:bg-[#9747ff] hover:text-white transition-colors"
                 >
                   Login to tribly
                   <ChevronIcon className="w-6 h-6" />
@@ -384,7 +415,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="absolute top-[88px] right-[160px] bg-white border-[#ff9696] border-[0.221px] rounded-[7.081px] p-4 rotate-[16.428deg]">
+            <div className="absolute top-[8px] right-[120px] bg-white border border-[#d8b4fe] rounded-[7.081px] p-4 rotate-[16.428deg]">
               <p className="text-[#1a1a1a] text-base leading-[1.4] w-[132px]">
                 <span className="font-bold">Reduce negative reviews </span>by up
                 to
@@ -394,18 +425,18 @@ export default function LandingPage() {
               </p>
             </div>
 
-            <div className="absolute top-[259px] right-[120px] bg-white border-[#ff9696] border-[0.221px] rounded-[7.081px] p-4">
+            <div className="absolute top-[259px] right-[120px] bg-white border border-[#d8b4fe] rounded-[7.081px] p-4">
               <p className="text-[#1a1a1a] text-base leading-[1.4] font-medium">
                 You need 144 more
                 <br />
                 reviews to beat
               </p>
-              <p className="text-[#2be656] text-[38.129px] font-semibold leading-[28.597px] mt-2">
+              <p className="text-[#059669] text-[38.129px] font-semibold leading-[28.597px] mt-2">
                 #2
               </p>
             </div>
 
-            <div className="absolute top-[328px] left-[21px] bg-white border-[#ff9696] border-[0.221px] rounded-[7.081px] p-4">
+            <div className="absolute top-[328px] left-[21px] bg-white border border-[#d8b4fe] rounded-[7.081px] p-4">
               <p className="text-[#1a1a1a] text-base leading-[1.4] font-bold w-[132px]">
                 Bost Your business Visibility
               </p>
@@ -507,8 +538,8 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Search Section - 16px padding on mobile for full-width search area */}
-        <div className="relative z-20 -mt-26 md:-mt-30 mx-auto w-full max-w-[1160px] px-4 md:px-6">
+        {/* Search Section - 16px padding on mobile for full-width search area; shifted 120px up */}
+        <div className="relative z-20 -mt-26 md:-mt-30 -translate-y-[120px] mx-auto w-full max-w-[1160px] px-4 md:px-6">
           {/* Outer gradient stroke (top, left, right) */}
           <div
             className="rounded-t-[24px] md:rounded-t-[40px] overflow-hidden"
@@ -549,9 +580,47 @@ export default function LandingPage() {
                     Find your business position Among Local Competitors
                   </p>
                   <div
-                    className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-center w-full md:max-w-[752px] mx-auto"
+                    className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-center w-full md:max-w-[940px] mx-auto"
                     ref={searchContainerRef}
                   >
+                    <div className="hidden md:flex flex-shrink-0 items-center -mr-2">
+                      <svg
+                        width="131"
+                        height="82"
+                        viewBox="0 0 131 82"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="w-[123px] h-[77px]"
+                      >
+                        <path
+                          d="M65.1934 0L72.3374 9.65565L83.5605 1.64449L86.0467 12.1624L100.44 6.44474L98.0666 16.9728L114.463 14.0119L107.423 23.6971L124.495 23.7328L113.359 31.7907L129.723 34.82L115.392 40.5977L129.723 46.3753L113.359 49.4047L124.495 57.4626L107.423 57.4982L114.463 67.1835L98.0666 64.2226L100.44 74.7506L86.0467 69.033L83.5605 79.5509L72.3374 71.5397L65.1934 81.1954L58.0493 71.5397L46.8263 79.5509L44.34 69.033L29.9472 74.7506L32.3201 64.2226L15.9235 67.1835L22.9634 57.4982L5.8914 57.4626L17.0279 49.4047L0.663574 46.3753L14.9945 40.5977L0.663574 34.82L17.0279 31.7907L5.8914 23.7328L22.9634 23.6971L15.9235 14.0119L32.3201 16.9728L29.9472 6.44474L44.34 12.1624L46.8263 1.64449L58.0493 9.65565L65.1934 0Z"
+                          fill="#9747FF"
+                        />
+                        <path
+                          d="M39.7129 47.3305L36.1247 47.0388L37.4276 31.0117L49.46 31.9898L49.1974 35.2192L40.7533 34.5327L40.4557 38.1926L48.5411 38.8499L48.2805 42.0554L40.1952 41.3981L39.7129 47.3305ZM53.4021 48.4433L49.8139 48.1517L51.1169 32.1245L58.4846 32.7235C62.3119 33.0346 64.297 34.9779 64.0442 38.0876C63.8322 40.695 62.4141 42.1449 59.6437 42.1604L59.6243 42.3996C60.9767 42.943 61.5784 43.8347 62.1012 45.1052L63.8078 49.2893L59.6216 48.949L58.0332 45.0876C57.4284 43.6418 56.9986 43.0049 55.3002 42.8668L53.8649 42.7501L53.4021 48.4433ZM54.4425 35.6456L54.1061 39.7839L58.053 40.1048C59.7275 40.2409 60.3185 39.7833 60.4469 38.2045C60.5714 36.6736 60.064 36.1026 58.3895 35.9664L54.4425 35.6456ZM77.0584 50.3665L64.8347 49.3728L66.1376 33.3456L78.3613 34.3394L78.0988 37.5687L69.4633 36.8667L69.2085 40.0003L77.4852 40.6732L77.2246 43.8786L68.9479 43.2058L68.6854 46.4351L77.3209 47.1371L77.0584 50.3665ZM91.1681 51.5135L78.9444 50.5198L80.2473 34.4927L92.471 35.4864L92.2085 38.7157L83.573 38.0137L83.3182 41.1474L91.5949 41.8202L91.3343 45.0257L83.0576 44.3528L82.7951 47.5822L91.4306 48.2842L91.1681 51.5135Z"
+                          fill="white"
+                        />
+                      </svg>
+                    </div>
+                    <div className="flex justify-center md:hidden mb-2">
+                      <svg
+                        width="131"
+                        height="82"
+                        viewBox="0 0 131 82"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="w-[150px] h-[95px]"
+                      >
+                        <path
+                          d="M65.1934 0L72.3374 9.65565L83.5605 1.64449L86.0467 12.1624L100.44 6.44474L98.0666 16.9728L114.463 14.0119L107.423 23.6971L124.495 23.7328L113.359 31.7907L129.723 34.82L115.392 40.5977L129.723 46.3753L113.359 49.4047L124.495 57.4626L107.423 57.4982L114.463 67.1835L98.0666 64.2226L100.44 74.7506L86.0467 69.033L83.5605 79.5509L72.3374 71.5397L65.1934 81.1954L58.0493 71.5397L46.8263 79.5509L44.34 69.033L29.9472 74.7506L32.3201 64.2226L15.9235 67.1835L22.9634 57.4982L5.8914 57.4626L17.0279 49.4047L0.663574 46.3753L14.9945 40.5977L0.663574 34.82L17.0279 31.7907L5.8914 23.7328L22.9634 23.6971L15.9235 14.0119L32.3201 16.9728L29.9472 6.44474L44.34 12.1624L46.8263 1.64449L58.0493 9.65565L65.1934 0Z"
+                          fill="#9747FF"
+                        />
+                        <path
+                          d="M39.7129 47.3305L36.1247 47.0388L37.4276 31.0117L49.46 31.9898L49.1974 35.2192L40.7533 34.5327L40.4557 38.1926L48.5411 38.8499L48.2805 42.0554L40.1952 41.3981L39.7129 47.3305ZM53.4021 48.4433L49.8139 48.1517L51.1169 32.1245L58.4846 32.7235C62.3119 33.0346 64.297 34.9779 64.0442 38.0876C63.8322 40.695 62.4141 42.1449 59.6437 42.1604L59.6243 42.3996C60.9767 42.943 61.5784 43.8347 62.1012 45.1052L63.8078 49.2893L59.6216 48.949L58.0332 45.0876C57.4284 43.6418 56.9986 43.0049 55.3002 42.8668L53.8649 42.7501L53.4021 48.4433ZM54.4425 35.6456L54.1061 39.7839L58.053 40.1048C59.7275 40.2409 60.3185 39.7833 60.4469 38.2045C60.5714 36.6736 60.064 36.1026 58.3895 35.9664L54.4425 35.6456ZM77.0584 50.3665L64.8347 49.3728L66.1376 33.3456L78.3613 34.3394L78.0988 37.5687L69.4633 36.8667L69.2085 40.0003L77.4852 40.6732L77.2246 43.8786L68.9479 43.2058L68.6854 46.4351L77.3209 47.1371L77.0584 50.3665ZM91.1681 51.5135L78.9444 50.5198L80.2473 34.4927L92.471 35.4864L92.2085 38.7157L83.573 38.0137L83.3182 41.1474L91.5949 41.8202L91.3343 45.0257L83.0576 44.3528L82.7951 47.5822L91.4306 48.2842L91.1681 51.5135Z"
+                          fill="white"
+                        />
+                      </svg>
+                    </div>
                     <div
                       className="w-full md:flex-1 relative"
                       ref={searchAnchorRef}
@@ -626,14 +695,16 @@ export default function LandingPage() {
                       </div>
                     </div>
                     <button
-                      className="w-fit flex items-center justify-center gap-2 px-6 py-3 md:py-4 bg-white rounded-full font-medium transition-colors font-clash-grotesk whitespace-nowrap border hover:bg-[#f7f1ff] self-center"
+                      type="button"
+                      disabled
+                      className="w-fit flex items-center justify-center gap-2 px-6 py-3 md:py-4 bg-white rounded-full font-medium transition-colors font-clash-grotesk whitespace-nowrap border opacity-50 cursor-not-allowed self-center"
                       style={{
                         color: BRAND_COLORS.primary,
                         borderColor: BRAND_COLORS.primary,
                         boxShadow: `0px 4px 0px 0px ${BRAND_COLORS.primaryDark}`,
                       }}
                     >
-                      Get My Report
+                      Get Free Report
                       <ChevronIcon className="w-5 h-5 md:w-6 md:h-6" />
                     </button>
                   </div>
@@ -1095,7 +1166,7 @@ export default function LandingPage() {
                     </span>
                   </div>
                 </div>
-                <div className="absolute top-[80px] md:top-[110px] right-4 md:right-6">
+                <div className="absolute top-[80px] md:top-[110px] right-[32px] md:right-[40px]">
                   <div className="relative inline-block">
                     <div className="flex items-center gap-2.5 md:gap-2 px-4 py-3 md:px-4 md:py-2 bg-[#B673FF] border-2 border-[#B673FF] rounded-[99px] min-h-[44px] md:min-h-0">
                       <svg
@@ -1137,7 +1208,7 @@ export default function LandingPage() {
                     </span>
                   </div>
                 </div>
-                <div className="absolute bottom-4 md:bottom-6 right-4 md:right-6">
+                <div className="absolute bottom-4 md:bottom-6 right-[32px] md:right-[40px]">
                   <div className="relative inline-block">
                     <div className="flex items-center gap-2.5 md:gap-2 px-4 py-3 md:px-4 md:py-2 bg-[#C5A3FF] border-2 border-[#C5A3FF] rounded-[99px] min-h-[44px] md:min-h-0">
                       <svg
@@ -1832,11 +1903,11 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Perfect for All Businesses - sliding-carousel removes strokes via CSS */}
-      <section className="sliding-carousel-section mt-20 py-10 md:py-16 bg-[#f7f1ff] overflow-hidden relative min-h-[525px]">
-        <div className="relative w-full min-h-[525px] md:flex md:items-center">
+      {/* Perfect for All Businesses - scroll end-to-end with section, no extra top/bottom space */}
+      <section className="sliding-carousel-section mt-20 py-0 bg-[#f7f1ff] overflow-hidden relative min-h-[473px]">
+        <div className="relative w-full min-h-[473px] md:flex md:items-center md:min-h-[72vh]">
           {/* Mobile Container - responsive, same images as desktop */}
-          <div className="md:hidden relative bg-[#f7f1ff] min-h-[525px] w-full overflow-hidden px-4 pb-10">
+          <div className="md:hidden relative bg-[#f7f1ff] min-h-[473px] w-full overflow-hidden px-4 pb-10">
             {/* Heading */}
             <div className="pt-12 pb-4 text-center max-w-[284px] mx-auto">
               <h2 className="font-clash-grotesk font-semibold text-[24px] leading-[1.4] text-black">
@@ -1874,9 +1945,9 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Desktop Container - vertically centered */}
+          {/* Desktop: title + body — vertically centered in section */}
           <div className="hidden md:block max-w-7xl mx-auto px-4 md:px-8 relative z-10 w-full">
-            <div className="max-w-md text-center md:text-left mb-8">
+            <div className="max-w-md text-center md:text-left">
               <h2 className="text-[24px] md:text-[64px] font-semibold leading-none mb-4 md:mb-8 font-clash-grotesk">
                 Perfect for all businesses
               </h2>
@@ -1887,38 +1958,43 @@ export default function LandingPage() {
               </p>
             </div>
           </div>
-          <div className="hidden md:flex absolute right-0 top-10 md:top-16 gap-3 md:gap-4 opacity-50 md:opacity-100 pr-[100px]">
-            <div className="flex flex-col gap-3 md:gap-4 animate-scroll">
-              {["pfb06.png", "pfb05.png", "pfb04.png"].map((img, i) => (
-                <div
-                  key={i}
-                  className="w-[124px] h-[162px] md:w-[248px] md:h-[323px] rounded-2xl md:rounded-3xl overflow-hidden border-0 outline-none ring-0 shadow-none [&_img]:outline-none [&_img]:border-0 [&_img]:ring-0"
-                >
-                  <Image
-                    src={`/assets/${img}`}
-                    alt={`Business ${i + 1}`}
-                    width={248}
-                    height={323}
-                    className="w-full h-full object-cover border-0 outline-none ring-0"
-                  />
-                </div>
-              ))}
+          {/* Desktop: two columns full height, top-aligned, no extra wrapper */}
+          <div className="hidden md:flex absolute right-0 top-0 bottom-0 gap-3 md:gap-4 opacity-50 md:opacity-100 pr-[100px]">
+            <div className="overflow-hidden flex flex-col h-full w-[124px] md:w-[248px]">
+              <div className="flex flex-col gap-3 md:gap-4 animate-scroll-vertical flex-shrink-0">
+                {[...["pfb06.png", "pfb05.png", "pfb04.png"], ...["pfb06.png", "pfb05.png", "pfb04.png"]].map((img, i) => (
+                  <div
+                    key={i}
+                    className="w-[124px] h-[162px] md:w-[248px] md:h-[323px] rounded-2xl md:rounded-3xl overflow-hidden border-0 outline-none ring-0 shadow-none flex-shrink-0 [&_img]:outline-none [&_img]:border-0 [&_img]:ring-0"
+                  >
+                    <Image
+                      src={`/assets/${img}`}
+                      alt={`Business ${(i % 3) + 1}`}
+                      width={248}
+                      height={323}
+                      className="w-full h-full object-cover border-0 outline-none ring-0"
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex flex-col gap-3 md:gap-4 animate-scroll-reverse">
-              {["pfb03.png", "pfb02.png", "pfb01.png"].map((img, i) => (
-                <div
-                  key={i}
-                  className="w-[124px] h-[162px] md:w-[248px] md:h-[323px] rounded-2xl md:rounded-3xl overflow-hidden border-0 outline-none ring-0 shadow-none [&_img]:outline-none [&_img]:border-0 [&_img]:ring-0"
-                >
-                  <Image
-                    src={`/assets/${img}`}
-                    alt={`Business ${i + 4}`}
-                    width={248}
-                    height={323}
-                    className="w-full h-full object-cover border-0 outline-none ring-0"
-                  />
-                </div>
-              ))}
+            <div className="overflow-hidden flex flex-col h-full w-[124px] md:w-[248px]">
+              <div className="flex flex-col gap-3 md:gap-4 animate-scroll-vertical-reverse flex-shrink-0">
+                {[...["pfb03.png", "pfb02.png", "pfb01.png"], ...["pfb03.png", "pfb02.png", "pfb01.png"]].map((img, i) => (
+                  <div
+                    key={i}
+                    className="w-[124px] h-[162px] md:w-[248px] md:h-[323px] rounded-2xl md:rounded-3xl overflow-hidden border-0 outline-none ring-0 shadow-none flex-shrink-0 [&_img]:outline-none [&_img]:border-0 [&_img]:ring-0"
+                  >
+                    <Image
+                      src={`/assets/${img}`}
+                      alt={`Business ${(i % 3) + 4}`}
+                      width={248}
+                      height={323}
+                      className="w-full h-full object-cover border-0 outline-none ring-0"
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -2041,11 +2117,11 @@ export default function LandingPage() {
             className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border-0"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="bg-gradient-to-br from-[#9747ff] to-[#7929e6] px-6 md:px-8 pt-6 pb-8 relative">
+            {/* Header — clean, elegant */}
+            <div className="bg-white px-6 md:px-8 pt-6 pb-6 relative border-b border-[#e8ddff]/80 rounded-t-2xl">
               <button
                 onClick={() => setIsContactModalOpen(false)}
-                className="absolute top-4 right-4 p-2 rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors"
+                className="absolute top-5 right-5 p-2 rounded-full text-[#6b7280] hover:bg-[#f7f1ff] hover:text-[#9747ff] transition-colors"
                 aria-label="Close"
               >
                 <svg
@@ -2062,15 +2138,17 @@ export default function LandingPage() {
                   />
                 </svg>
               </button>
-              <h2
-                id="contact-modal-title"
-                className="text-xl md:text-2xl font-semibold text-white font-clash-grotesk pr-10"
-              >
-                Talk to an expert
-              </h2>
-              <p className="text-white/90 text-sm mt-1 font-clash-grotesk">
-                Free consultation — we’re here to help
-              </p>
+              <div className="pr-10">
+                <h2
+                  id="contact-modal-title"
+                  className="text-xl md:text-2xl font-semibold text-[#1a1a1a] font-clash-grotesk tracking-tight"
+                >
+                  Talk to an expert
+                </h2>
+                <p className="text-[#6b7280] text-sm mt-1.5 font-clash-grotesk">
+                  Free consultation — we’re here to help
+                </p>
+              </div>
             </div>
 
             {/* Body */}
@@ -2080,7 +2158,7 @@ export default function LandingPage() {
               </p>
               <div className="space-y-3">
                 <a
-                  href="mailto:reviewqr@tribly.ai"
+                  href="mailto:growth@tribly.ai"
                   className="flex items-center gap-4 p-4 rounded-2xl bg-white border border-[#e8ddff] hover:border-[#9747ff]/40 hover:shadow-[0_4px_12px_rgba(151,71,255,0.12)] transition-all text-[#1a1a1a] group"
                 >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f1ff] text-[#9747ff] group-hover:bg-[#9747ff] group-hover:text-white transition-colors">
@@ -2103,7 +2181,7 @@ export default function LandingPage() {
                       Email
                     </span>
                     <span className="block font-medium text-[#1a1a1a] truncate">
-                      reviewqr@tribly.ai
+                      growth@tribly.ai
                     </span>
                   </div>
                   <ChevronIcon className="w-5 h-5 text-[#9747ff] shrink-0 rotate-[-90deg]" />
@@ -2193,7 +2271,7 @@ export default function LandingPage() {
           />
           {/* Panel: slide up from bottom + fade */}
           <div
-            className={`relative flex flex-col flex-1 min-h-0 bg-[#f7f1ff] rounded-t-3xl md:rounded-t-[2rem] shadow-[0_-8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 ease-out ${
+            className={`relative flex flex-col flex-1 min-h-0 bg-[#f7f1ff] rounded-none shadow-[0_-8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 ease-out ${
               searchOverlayExiting
                 ? "translate-y-full opacity-0"
                 : searchOverlayEntered
@@ -2206,9 +2284,13 @@ export default function LandingPage() {
             <div className="flex items-center gap-3 px-4 md:px-[200px] pt-4 md:pt-6 pb-3 border-b border-[#e8ddff]/60 shrink-0">
               <button
                 type="button"
-                onClick={closeSearchOverlay}
+                onClick={
+                  reportStep === "contact"
+                    ? () => setReportStep("search")
+                    : closeSearchOverlay
+                }
                 className="p-2 -ml-2 rounded-full text-[#9747ff] hover:bg-white/60 transition-colors"
-                aria-label="Close search"
+                aria-label={reportStep === "contact" ? "Back" : "Close search"}
               >
                 <svg
                   className="w-6 h-6"
@@ -2225,10 +2307,65 @@ export default function LandingPage() {
                 </svg>
               </button>
               <h2 className="text-lg md:text-xl font-semibold text-[#1a1a1a] font-clash-grotesk flex-1">
-                Find your business Position in the market
+                {reportStep === "contact"
+                  ? "Where should we send your report?"
+                  : "Find your business Position in the market"}
               </h2>
             </div>
-            {/* Search input + Get My Report (desktop: side by side; mobile: search only) */}
+            {reportStep === "contact" ? (
+              /* Contact details step: WhatsApp + Email — centered */
+              <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-[200px] py-6 flex flex-col items-center justify-center text-center">
+                <p className="text-[#6b7280] text-sm mb-4 max-w-md">
+                  We&apos;ll send the report for <strong className="text-[#1a1a1a]">{searchValue}</strong>. Enter at least one contact.
+                </p>
+                <div className="space-y-4 max-w-md w-full">
+                  <label className="block text-center">
+                    <span className="text-sm font-medium text-[#1a1a1a] block mb-1.5">
+                      WhatsApp / Phone number
+                    </span>
+                    <input
+                      type="tel"
+                      placeholder="e.g. +91 98765 43210"
+                      value={reportWhatsApp}
+                      onChange={(e) => setReportWhatsApp(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border bg-white text-[#1a1a1a] placeholder:text-[#9ca3af] outline-none focus:ring-2 focus:ring-[#9747ff]/30 text-center"
+                      style={{ borderColor: BRAND_COLORS.primary }}
+                    />
+                  </label>
+                  <label className="block text-center">
+                    <span className="text-sm font-medium text-[#1a1a1a] block mb-1.5">
+                      Email
+                    </span>
+                    <input
+                      type="email"
+                      placeholder="you@example.com"
+                      value={reportEmail}
+                      onChange={(e) => setReportEmail(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border bg-white text-[#1a1a1a] placeholder:text-[#9ca3af] outline-none focus:ring-2 focus:ring-[#9747ff]/30 text-center"
+                      style={{ borderColor: BRAND_COLORS.primary }}
+                    />
+                  </label>
+                </div>
+                <div className="mt-8 md:mt-10 flex justify-center">
+                  <button
+                    type="button"
+                    disabled={!reportWhatsApp.trim() && !reportEmail.trim()}
+                    className="w-full md:w-auto md:min-w-[200px] flex items-center justify-center gap-2 px-6 py-4 bg-white rounded-full font-medium transition-colors font-clash-grotesk border disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#f7f1ff]"
+                    style={{
+                      color: BRAND_COLORS.primary,
+                      borderColor: BRAND_COLORS.primary,
+                      boxShadow: `0px 4px 0px 0px ${BRAND_COLORS.primaryDark}`,
+                    }}
+                    onClick={handleSendReportSubmit}
+                  >
+                    Send me the report
+                    <ChevronIcon className="w-5 h-5 md:w-6 md:h-6" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+            {/* Search input + Get Free Report (desktop: side by side; mobile: search only) */}
             <div className="px-4 md:px-[200px] py-4 shrink-0 flex flex-col md:flex-row gap-4 md:items-center">
               <div
                 className="flex flex-1 items-center bg-white border rounded-full p-2 gap-2 min-h-[52px] md:min-h-[56px] shadow-sm"
@@ -2292,18 +2429,16 @@ export default function LandingPage() {
               </div>
               <button
                 type="button"
-                className="hidden md:flex items-center justify-center gap-2 px-6 py-4 bg-white rounded-full font-medium transition-colors font-clash-grotesk border hover:bg-[#f7f1ff] shrink-0"
+                disabled={!searchValue.trim()}
+                className="hidden md:flex items-center justify-center gap-2 px-6 py-4 bg-white rounded-full font-medium transition-colors font-clash-grotesk border hover:bg-[#f7f1ff] shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   color: BRAND_COLORS.primary,
                   borderColor: BRAND_COLORS.primary,
                   boxShadow: `0px 4px 0px 0px ${BRAND_COLORS.primaryDark}`,
                 }}
-                onClick={() => {
-                  closeSearchOverlay();
-                  // Take action here: e.g. submit report flow, navigate, or open form
-                }}
+                onClick={handleGetReportClick}
               >
-                Get My Report
+                Get Free Report
                 <ChevronIcon className="w-5 h-5 md:w-6 md:h-6" />
               </button>
             </div>
@@ -2340,25 +2475,14 @@ export default function LandingPage() {
                 </ul>
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 md:py-16 text-center">
-                  <div
-                    className="w-14 h-14 rounded-full flex items-center justify-center mb-4"
-                    style={{
-                      backgroundColor: `rgba(${BRAND_COLORS.primaryRgb}, 0.12)`,
-                    }}
-                  >
-                    <svg
-                      className="w-7 h-7 text-[#9747ff]"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                      />
-                    </svg>
+                  <div className="w-40 h-40 md:w-48 md:h-48 flex items-center justify-center mb-4">
+                    <Image
+                      src="/assets/search-binoculars.png"
+                      alt="Search"
+                      width={192}
+                      height={192}
+                      className="w-full h-full object-contain"
+                    />
                   </div>
                   <p className="text-[#6b7280] text-sm md:text-base font-clash-grotesk">
                     {searchValue.trim()
@@ -2368,25 +2492,25 @@ export default function LandingPage() {
                 </div>
               )}
             </div>
-            {/* Get My Report - sticky footer (mobile only; desktop has button next to search) */}
+            {/* Get Free Report - sticky footer (mobile only; desktop has button next to search) */}
             <div className="md:hidden shrink-0 px-4 md:px-[200px] py-4 md:py-5 border-t border-[#e8ddff]/60 bg-[#f7f1ff]/80 backdrop-blur-sm">
               <button
                 type="button"
-                className="w-full flex items-center justify-center gap-2 px-6 py-3 md:py-4 bg-white rounded-full font-medium transition-colors font-clash-grotesk border hover:bg-[#f7f1ff]"
+                disabled={!searchValue.trim()}
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 md:py-4 bg-white rounded-full font-medium transition-colors font-clash-grotesk border hover:bg-[#f7f1ff] disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   color: BRAND_COLORS.primary,
                   borderColor: BRAND_COLORS.primary,
                   boxShadow: `0px 4px 0px 0px ${BRAND_COLORS.primaryDark}`,
                 }}
-                onClick={() => {
-                  closeSearchOverlay();
-                  // Take action here: e.g. submit report flow, navigate, or open form
-                }}
+                onClick={handleGetReportClick}
               >
-                Get My Report
+                Get Free Report
                 <ChevronIcon className="w-5 h-5 md:w-6 md:h-6" />
               </button>
             </div>
+              </>
+            )}
           </div>
         </div>
       )}

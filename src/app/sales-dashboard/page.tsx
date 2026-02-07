@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -40,6 +40,7 @@ import {
 function SalesDashboardContent() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [user, setUser] = useState(getStoredUser());
 
   // QR code set when user scans in BusinessSettingsCard (step 2), used in API payload
@@ -63,9 +64,21 @@ function SalesDashboardContent() {
     }
 
     if (pathname === "/sales-dashboard" || pathname === "/sales-dashboard/") {
-      router.replace("/sales-dashboard/step-1");
+      const business = searchParams.get("business");
+      const query = business
+        ? `?business=${encodeURIComponent(business)}`
+        : "";
+      router.replace(`/sales-dashboard/step-1${query}`);
     }
-  }, [pathname, router, currentStep]);
+  }, [pathname, router, currentStep, searchParams]);
+
+  // Prefill business name from URL when coming from landing "Get report" flow
+  useEffect(() => {
+    const businessFromUrl = searchParams.get("business");
+    if (businessFromUrl?.trim()) {
+      setBusinessName(decodeURIComponent(businessFromUrl.trim()));
+    }
+  }, [searchParams]);
 
   // Business analysis state
   const [businessName, setBusinessName] = useState("");
