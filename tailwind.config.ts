@@ -10,8 +10,8 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"Clash Grotesk"', "system-ui", "sans-serif"],
-        "clash-grotesk": ['"Clash Grotesk"', "system-ui", "sans-serif"],
+        sans: ["var(--font-clash-grotesk)", "system-ui", "sans-serif"],
+        "clash-grotesk": ["var(--font-clash-grotesk)", "system-ui", "sans-serif"],
       },
       colors: {
         background: "hsl(var(--background))",

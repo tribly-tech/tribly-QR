@@ -1,41 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import localFont from "next/font/local";
 import "./globals.css";
-
-const clashGrotesk = localFont({
-  src: [
-    {
-      path: "../fonts/ClashGrotesk-Regular.woff2",
-      weight: "400",
-      style: "normal",
-    },
-    {
-      path: "../fonts/ClashGrotesk-Medium.woff2",
-      weight: "500",
-      style: "normal",
-    },
-    {
-      path: "../fonts/ClashGrotesk-Semibold.woff2",
-      weight: "600",
-      style: "normal",
-    },
-    {
-      path: "../fonts/ClashGrotesk-Bold.woff2",
-      weight: "700",
-      style: "normal",
-    },
-  ],
-  variable: "--font-clash-grotesk",
-  display: "swap",
-  fallback: ["system-ui", "sans-serif"],
-});
 
 export const metadata: Metadata = {
   title: "Growth QR - Turn Google Reviews into Revenue",
   description:
     "More stars. More visibility. More growth. Growth QR turns Google reviews into real revenue for your business",
   icons: {
-    icon: "/icon.png",
+    icon: [
+      { url: "/favicon.png", type: "image/png" },
+      { url: "/icon.png", type: "image/png", sizes: "32x32" },
+    ],
     apple: "/apple-icon.png",
   },
 };
@@ -54,8 +28,24 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={clashGrotesk.variable}>
-      <body className={clashGrotesk.className}>
+    <html lang="en">
+      <head>
+        <link
+          rel="preload"
+          href="/fonts/ClashGrotesk-Regular.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="preload"
+          href="/fonts/ClashGrotesk-Semibold.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+      </head>
+      <body>
         <LegacyCleanup />
         {children}
       </body>
