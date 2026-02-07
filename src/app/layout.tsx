@@ -31,8 +31,13 @@ const clashGrotesk = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Tribly QR - Share Your Feedback",
-  description: "Share your experience and help us improve",
+  title: "Growth QR - Turn Google Reviews into Revenue",
+  description:
+    "More stars. More visibility. More growth. Growth QR turns Google reviews into real revenue for your business",
+  icons: {
+    icon: "/icon.png",
+    apple: "/apple-icon.png",
+  },
 };
 
 export const viewport: Viewport = {
