@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const TRIBLY_API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+import { validateQr } from "@/services/api/qr";
+import { validateQrBodySchema } from "@/lib/validation";
 
 /**
  * POST /api/qr/validate
@@ -11,41 +10,21 @@ const TRIBLY_API_BASE =
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const qr_data = body.qr_data;
-
-    if (!qr_data || typeof qr_data !== "string" || !qr_data.trim()) {
-      return NextResponse.json(
-        { error: "qr_data is required" },
-        { status: 400 }
-      );
+    const parsed = validateQrBodySchema.safeParse(body);
+    if (!parsed.success) {
+      const msg = parsed.error.issues[0]?.message ?? "qr_data is required";
+      return NextResponse.json({ error: msg }, { status: 400 });
     }
 
-    const authHeader = request.headers.get("authorization");
-    const headers: HeadersInit = {
-      "Content-Type": "application/json",
-    };
-    if (authHeader) {
-      headers["Authorization"] = authHeader;
-    }
-
-    const response = await fetch(
-      `${TRIBLY_API_BASE}/dashboard/v1/business_qr/validate-qr`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ qr_data: qr_data.trim() }),
-      }
+    const result = await validateQr(
+      parsed.data.qr_data,
+      request.headers.get("authorization")
     );
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      return NextResponse.json(data || { error: "Validation failed" }, {
-        status: response.status,
-      });
+    if (!result.ok) {
+      return NextResponse.json(result.error, { status: result.status });
     }
-
-    return NextResponse.json(data);
+    return NextResponse.json(result.data);
   } catch (error) {
     console.error("Error validating QR:", error);
     return NextResponse.json(

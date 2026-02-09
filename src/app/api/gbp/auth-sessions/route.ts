@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const TRIBLY_API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+import { createGbpAuthSession } from "@/services/api/gbp";
+import { gbpAuthSessionBodySchema } from "@/lib/validation";
 
 /**
  * POST /api/gbp/auth-sessions
@@ -20,58 +19,32 @@ const TRIBLY_API_BASE =
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { business_name, business_phone, place_id } = body;
-
-    if (!business_name || !business_phone) {
-      return NextResponse.json(
-        { error: "business_name and business_phone are required" },
-        { status: 400 },
-      );
+    const parsed = gbpAuthSessionBodySchema.safeParse(body);
+    if (!parsed.success) {
+      const msg =
+        parsed.error.issues[0]?.message ??
+        "business_name and business_phone are required";
+      return NextResponse.json({ error: msg }, { status: 400 });
     }
 
-    const authHeader = request.headers.get("authorization");
-
-    const headers: HeadersInit = {
-      "Content-Type": "application/json",
-    };
-    if (authHeader) {
-      headers["Authorization"] = authHeader;
-    }
-
-    const response = await fetch(
-      `${TRIBLY_API_BASE}/dashboard/v1/gbp/auth-sessions`,
+    const result = await createGbpAuthSession(
       {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          business_name,
-          business_phone,
-          place_id: place_id || null,
-        }),
+        business_name: parsed.data.business_name,
+        business_phone: parsed.data.business_phone,
+        place_id: parsed.data.place_id ?? null,
       },
+      request.headers.get("authorization")
     );
 
-    if (!response.ok) {
-      const text = await response.text();
-      let errorBody: unknown;
-      try {
-        errorBody = JSON.parse(text);
-      } catch {
-        errorBody = { message: text || response.statusText };
-      }
-      return NextResponse.json(
-        errorBody || { error: "Failed to create auth session" },
-        { status: response.status },
-      );
+    if (!result.ok) {
+      return NextResponse.json(result.error, { status: result.status });
     }
-
-    const data = await response.json();
-    return NextResponse.json(data);
+    return NextResponse.json(result.data);
   } catch (error) {
     console.error("Error creating GBP auth session:", error);
     return NextResponse.json(
       { error: "Failed to create auth session" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

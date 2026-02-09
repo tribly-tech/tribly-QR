@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -54,8 +54,14 @@ interface SalesTeamMember {
   createdAt?: string;
 }
 
+const PROFILE_TABS = ["personal", "sales-team"] as const;
+const DEFAULT_PROFILE_TAB = "personal";
+
 export default function ProfilePage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [profileTab, setProfileTab] = useState(DEFAULT_PROFILE_TAB);
   const [user, setUser] = useState<User | null>(null);
   const [profileData, setProfileData] = useState({
     name: "",
@@ -83,6 +89,25 @@ export default function ProfilePage() {
     email: "",
     phone: "",
   });
+
+  const isAdmin = !!user && (user.role === "admin" || user.userType === "admin" || (!user.role && (user.email === "admin@tribly.com" || user.email === "admin@tribly.ai")));
+
+  // Sync profile tab from URL
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && PROFILE_TABS.includes(tab as (typeof PROFILE_TABS)[number])) {
+      if (tab === "sales-team" && !isAdmin) setProfileTab(DEFAULT_PROFILE_TAB);
+      else setProfileTab(tab as (typeof PROFILE_TABS)[number]);
+    }
+  }, [searchParams, isAdmin]);
+
+  const handleProfileTabChange = (value: string) => {
+    const next = new URLSearchParams(searchParams?.toString() ?? "");
+    next.set("tab", value);
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    setProfileTab(value as (typeof PROFILE_TABS)[number]);
+  };
 
   // Fetch sales team from API
   const fetchSalesTeam = useCallback(async () => {
@@ -358,9 +383,6 @@ export default function ProfilePage() {
     return null;
   }
 
-  // Check if user is admin (with fallback for email-based check)
-  const isAdmin = user.role === "admin" || (!user.role && (user.email === "admin@tribly.com" || user.email === "admin@tribly.ai"));
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF]">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -412,7 +434,7 @@ export default function ProfilePage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="personal" className="w-full">
+                <Tabs value={profileTab} onValueChange={handleProfileTabChange} className="w-full">
                   <TabsList className={isAdmin ? "grid w-full grid-cols-2" : "w-full"}>
                     <TabsTrigger value="personal" className="gap-2">
                       <UserIcon className="h-4 w-4" />

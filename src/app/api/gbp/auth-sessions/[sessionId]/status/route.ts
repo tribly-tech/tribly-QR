@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const TRIBLY_API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+import { getGbpAuthSessionStatus } from "@/services/api/gbp";
 
 /**
  * GET /api/gbp/auth-sessions/[sessionId]/status
@@ -14,56 +12,17 @@ const TRIBLY_API_BASE =
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ sessionId: string }> },
+  { params }: { params: Promise<{ sessionId: string }> }
 ) {
   const { sessionId } = await params;
 
-  if (!sessionId) {
-    return NextResponse.json(
-      { error: "Session ID is required" },
-      { status: 400 },
-    );
+  const result = await getGbpAuthSessionStatus(
+    sessionId,
+    request.headers.get("authorization")
+  );
+
+  if (!result.ok) {
+    return NextResponse.json(result.error, { status: result.status });
   }
-
-  const authHeader = request.headers.get("authorization");
-
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-  };
-  if (authHeader) {
-    headers["Authorization"] = authHeader;
-  }
-
-  try {
-    const response = await fetch(
-      `${TRIBLY_API_BASE}/dashboard/v1/gbp/auth-sessions/${sessionId}/status`,
-      {
-        method: "GET",
-        headers,
-      },
-    );
-
-    if (!response.ok) {
-      const text = await response.text();
-      let errorBody: unknown;
-      try {
-        errorBody = JSON.parse(text);
-      } catch {
-        errorBody = { message: text || response.statusText };
-      }
-      return NextResponse.json(
-        errorBody || { error: "Failed to get session status" },
-        { status: response.status },
-      );
-    }
-
-    const data = await response.json();
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error("Error getting GBP auth session status:", error);
-    return NextResponse.json(
-      { error: "Failed to get session status" },
-      { status: 500 },
-    );
-  }
+  return NextResponse.json(result.data);
 }
