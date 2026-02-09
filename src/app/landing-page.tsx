@@ -228,8 +228,8 @@ export default function LandingPage() {
       <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center p-4 md:p-6">
         <div className="flex flex-col items-center w-full md:w-auto max-w-[1400px] mx-auto">
           <div className="flex items-center justify-between w-full md:w-auto md:gap-10 backdrop-blur-xl px-6 md:px-10 py-4 rounded-full shadow-[0px_4px_0px_0px_rgba(151,71,255,0.32)] md:shadow-[0px_4px_0px_0px_rgba(151,71,255,0.32)] border border-white/30 bg-gradient-to-b from-white/70 to-white/25">
-            <span className="text-[#9747ff] text-[32px] md:text-[40px] font-medium font-clash-grotesk leading-tight tracking-[-0.8px]">
-              growth QR
+            <span className="text-[#9747ff] text-[32px] md:text-[40px] font-semibold font-clash-grotesk leading-tight tracking-[-0.8px]">
+              tribly.ai
             </span>
             {/* Mobile Menu Button */}
             <button
@@ -266,7 +266,7 @@ export default function LandingPage() {
                 onClick={() => router.push("/login")}
                 className="flex items-center justify-center gap-2 px-6 py-2 bg-[#f7f1ff] border border-[#9747ff] rounded-full text-[#9747ff] text-[15.1px] font-medium leading-[26px] h-12 hover:bg-[#9747ff] hover:text-white transition-colors"
               >
-                Login to tribly
+                Login to tribly.ai
                 <ChevronIcon className="w-6 h-6" />
               </button>
             </div>
@@ -286,7 +286,7 @@ export default function LandingPage() {
                   onClick={() => router.push("/login")}
                   className="flex items-center justify-center gap-2 px-6 py-2 bg-[#f7f1ff] border border-[#9747ff] rounded-full text-[#9747ff] text-[15.1px] font-medium leading-[26px] h-12 w-fit hover:bg-[#9747ff] hover:text-white transition-colors"
                 >
-                  Login to tribly
+                  Login to tribly.ai
                   <ChevronIcon className="w-6 h-6" />
                 </button>
               </div>

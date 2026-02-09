@@ -213,7 +213,7 @@ function GoogleBusinessAuthContent() {
 
         {/* Footer */}
         <p className="text-xs text-center text-muted-foreground">
-          Powered by Tribly • Helping businesses grow online
+          Powered by <span className="font-semibold">tribly.ai</span> • Helping businesses grow online
         </p>
       </div>
     </div>

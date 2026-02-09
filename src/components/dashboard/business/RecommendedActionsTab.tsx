@@ -14,6 +14,7 @@ import {
   Sparkles,
   ExternalLink,
   ArrowRight,
+  Circle,
 } from "lucide-react";
 
 const STORAGE_KEY_PREFIX = "gbp_action_done_";
@@ -162,29 +163,31 @@ export function RecommendedActionsTab({ businessName }: RecommendedActionsTabPro
 
   return (
     <div className="space-y-6">
-      {/* Hero: Next step (primary action card) */}
+      {/* Hero: Next step (primary action card) — redesigned */}
       {nextStep && (
-        <Card className="border-2 border-primary/30 bg-gradient-to-br from-primary/8 via-white to-primary/5 ring-1 ring-primary/10 overflow-hidden">
+        <Card className="overflow-hidden rounded-2xl border border-border/80 border-l-4 border-l-primary bg-white shadow-sm ring-1 ring-primary/10">
           <CardContent className="p-0">
-            <div className="p-5 sm:p-6">
-              <div className="flex items-start gap-4">
-                <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center shrink-0 ring-2 ring-primary/20">
-                  <Sparkles className="h-6 w-6 text-primary" />
+            <div className="p-6 sm:p-7">
+              <div className="flex flex-col sm:flex-row sm:items-start gap-5">
+                <div className="h-14 w-14 shrink-0 rounded-2xl bg-primary/10 flex items-center justify-center ring-1 ring-primary/20">
+                  <Sparkles className="h-7 w-7 text-primary" />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-1.5">
-                    Your next step
-                  </p>
-                  <h2 className="text-xl font-semibold text-gray-900 leading-snug mb-2">
-                    {nextStep.item.title}
-                  </h2>
-                  <p className="text-sm text-gray-600 leading-relaxed line-clamp-2 mb-5">
-                    {nextStep.item.description}
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-3">
+                <div className="min-w-0 flex-1 space-y-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-primary mb-2">
+                      Your next step
+                    </p>
+                    <h2 className="text-xl font-semibold text-foreground leading-snug mb-2">
+                      {nextStep.item.title}
+                    </h2>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {nextStep.item.description}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
                     <Button
                       size="lg"
-                      className="gap-2.5 w-full sm:w-auto sm:min-w-[200px] font-medium py-6 sm:py-5 text-base"
+                      className="gap-2 rounded-xl font-semibold shadow-sm"
                       onClick={() => window.open("https://business.google.com/", "_blank", "noopener,noreferrer")}
                     >
                       Open Google Business
@@ -193,11 +196,11 @@ export function RecommendedActionsTab({ businessName }: RecommendedActionsTabPro
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="gap-2 font-medium text-muted-foreground hover:text-gray-700 shrink-0 self-center sm:self-auto"
+                      className="gap-2 text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-lg"
                       onClick={() => toggleDone(nextStep.id)}
                     >
+                      <Circle className="h-4 w-4" strokeWidth={2} />
                       Mark as done
-                      <CheckCircle2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>

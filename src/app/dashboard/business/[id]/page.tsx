@@ -18,7 +18,6 @@ import { generateShortUrlCode, generateReviewUrl, generateQRCodeDataUrl, downloa
 import { getBusinessBySlug } from "@/lib/business-slug";
 import { getStoredUser, logout, setStoredUser, getAuthToken } from "@/lib/auth";
 import { BUSINESS_MAIN_TABS, BUSINESS_SETTINGS_SUB_TABS } from "@/lib/routes";
-import { categorySuggestions, serviceSuggestions } from "@/lib/category-suggestions";
 import { Toast } from "@/components/ui/toast";
 import { OverviewTab } from "@/components/dashboard/business/OverviewTab";
 import { KeywordsTab } from "@/components/dashboard/business/KeywordsTab";
@@ -47,14 +46,14 @@ import {
   LogOut,
   Loader2,
   AlertCircle,
-  Building2,
+  LayoutDashboard,
   Target,
   Lightbulb,
   Settings,
   Link2,
 } from "lucide-react";
 
-const DEFAULT_TAB: (typeof BUSINESS_MAIN_TABS)[number] = "gmb-health";
+const DEFAULT_TAB: (typeof BUSINESS_MAIN_TABS)[number] = "overview";
 const DEFAULT_SETTINGS_SUB: (typeof BUSINESS_SETTINGS_SUB_TABS)[number] = "links";
 
 export default function BusinessDetailPage() {
@@ -73,17 +72,11 @@ export default function BusinessDetailPage() {
   const [toastMessage, setToastMessage] = useState("");
   const [selectedReviewFilter, setSelectedReviewFilter] = useState<ReviewCategory | null>(null);
   const [newKeyword, setNewKeyword] = useState("");
-  const [newService, setNewService] = useState("");
   const [suggestionsLimit, setSuggestionsLimit] = useState(12);
   const [isBusinessOwner, setIsBusinessOwner] = useState(false);
   const [currentUser, setCurrentUser] = useState<ReturnType<typeof getStoredUser>>(null);
 
   // Category suggestions state
-  const [suggestedCategories, setSuggestedCategories] = useState<BusinessCategory[]>([]);
-
-  // Services state for enhanced form
-  const [serviceInput, setServiceInput] = useState("");
-  const [showServiceSuggestions, setShowServiceSuggestions] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "failed" | "expired">("pending");
   const [paymentQRCode, setPaymentQRCode] = useState<string | null>(null);
@@ -514,127 +507,7 @@ export default function BusinessDetailPage() {
     }
   };
 
-  const handleAddService = () => {
-    if (newService.trim() && business) {
-      const trimmedService = newService.trim();
-      const currentServices = business.services || [];
-
-      // Check if service already exists (case-insensitive)
-      if (currentServices.some(s => s.toLowerCase() === trimmedService.toLowerCase())) {
-        setToastMessage("Service already exists");
-        setShowToast(true);
-        return;
-      }
-
-      handleUpdateBusiness({
-        services: [...currentServices, trimmedService]
-      });
-      setNewService("");
-    }
-  };
-
-  const handleRemoveService = (serviceToRemove: string) => {
-    if (business && business.services) {
-      handleUpdateBusiness({
-        services: business.services.filter(s => s !== serviceToRemove)
-      });
-    }
-  };
-
-
   // Get service suggestions based on category
-  const getServiceSuggestions = useMemo(() => {
-    if (!business?.category) return [];
-    return serviceSuggestions[business.category] || [];
-  }, [business?.category]);
-
-  // Enhanced add service handler
-  const handleAddServiceEnhanced = (service: string) => {
-    if (!business) return;
-
-    if (service.trim() && !business.services?.includes(service.trim())) {
-      const currentServices = business.services || [];
-      handleUpdateBusiness({
-        services: [...currentServices, service.trim()],
-      });
-      setServiceInput("");
-      setShowServiceSuggestions(false);
-    }
-  };
-
-  // Close dropdowns when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (!target.closest('.service-input-container') && !target.closest('.service-suggestions-dropdown')) {
-        setShowServiceSuggestions(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Generate service suggestions based on previous services from other businesses in the same category
-  const suggestedServices = useMemo(() => {
-    if (!business) return [];
-
-    const currentServices = business.services || [];
-    const suggestions: string[] = [];
-
-    // Get all services from other businesses in the same category
-    const otherBusinesses = mockBusinesses.filter(
-      b => b.id !== business.id && b.category === business.category && b.services && b.services.length > 0
-    );
-
-    // Collect all unique services from other businesses
-    const serviceFrequency = new Map<string, number>();
-    otherBusinesses.forEach(b => {
-      b.services?.forEach(service => {
-        const normalizedService = service.toLowerCase();
-        serviceFrequency.set(normalizedService, (serviceFrequency.get(normalizedService) || 0) + 1);
-      });
-    });
-
-    // Sort by frequency and add to suggestions
-    const sortedServices = Array.from(serviceFrequency.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([service]) => {
-        // Find original casing from businesses
-        const originalService = otherBusinesses
-          .flatMap(b => b.services || [])
-          .find(s => s.toLowerCase() === service);
-        return originalService || service;
-      })
-      .filter(service =>
-        !currentServices.some(s => s.toLowerCase() === service.toLowerCase())
-      );
-
-    suggestions.push(...sortedServices);
-
-    // Add category-based default suggestions if no other businesses have services
-    if (suggestions.length === 0) {
-      const categoryServices: Record<string, string[]> = {
-        restaurant: ["Dine-in", "Takeout", "Delivery", "Catering", "Private Events", "Breakfast", "Lunch", "Dinner"],
-        retail: ["Product Sales", "Gift Wrapping", "Personal Shopping", "Layaway", "Returns & Exchanges"],
-        healthcare: ["Consultation", "Diagnostics", "Treatment", "Preventive Care", "Emergency Services"],
-        beauty: ["Haircut", "Hair Color", "Styling", "Manicure", "Pedicure", "Facial", "Massage", "Makeup"],
-        fitness: ["Personal Training", "Group Classes", "Cardio Equipment", "Weight Training", "Yoga", "Pilates"],
-        automotive: ["Oil Change", "Brake Service", "Tire Replacement", "Engine Repair", "AC Service"],
-        "real-estate": ["Property Sales", "Rentals", "Property Management", "Consultation", "Home Staging"],
-        education: ["Classes", "Tutoring", "Test Preparation", "Online Courses", "Certification Programs"],
-        hospitality: ["Room Booking", "Event Venue", "Catering", "Concierge Services", "Airport Shuttle"],
-        other: ["Consultation", "Custom Services", "Support", "Maintenance"]
-      };
-
-      if (business.category && categoryServices[business.category]) {
-        suggestions.push(...categoryServices[business.category]);
-      }
-    }
-
-    return suggestions;
-  }, [business]);
-
   // Generate SEO-optimized suggested keywords based on business category, location, and name
   const suggestedKeywords = useMemo(() => {
     if (!business) return [];
@@ -992,8 +865,20 @@ export default function BusinessDetailPage() {
         <Tabs value={activeTab} onValueChange={handleMainTabChange} className="flex flex-col lg:flex-row gap-6">
           <TabsList className="flex flex-col lg:w-64 w-full bg-white/80 backdrop-blur-sm border border-purple-100 p-2 rounded-lg shadow-sm h-fit space-y-1">
             <TabsTrigger
+              value="overview"
+              className="w-full justify-start rounded-md data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm transition-all py-3 h-auto"
+            >
+              <div className="flex items-start gap-3 w-full">
+                <LayoutDashboard className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col items-start gap-0.5 flex-1">
+                  <span className="font-medium">Overview</span>
+                  <span className="text-xs opacity-70">Unified performance snapshot</span>
+                </div>
+              </div>
+            </TabsTrigger>
+            <TabsTrigger
               value="gmb-health"
-              className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
+              className="w-full justify-start rounded-md data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
               <div className="flex items-start gap-3 w-full">
                 <Target className="h-5 w-5 mt-0.5 flex-shrink-0" />
@@ -1005,7 +890,7 @@ export default function BusinessDetailPage() {
             </TabsTrigger>
             <TabsTrigger
               value="recommended-actions"
-              className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
+              className="w-full justify-start rounded-md data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
               <div className="flex items-start gap-3 w-full">
                 <Lightbulb className="h-5 w-5 mt-0.5 flex-shrink-0" />
@@ -1017,7 +902,7 @@ export default function BusinessDetailPage() {
             </TabsTrigger>
             <TabsTrigger
               value="keywords"
-              className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
+              className="w-full justify-start rounded-md data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
               <div className="flex items-start gap-3 w-full">
                 <Hash className="h-5 w-5 mt-0.5 flex-shrink-0" />
@@ -1028,20 +913,8 @@ export default function BusinessDetailPage() {
               </div>
             </TabsTrigger>
             <TabsTrigger
-              value="overview"
-              className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
-            >
-              <div className="flex items-start gap-3 w-full">
-                <Building2 className="h-5 w-5 mt-0.5 flex-shrink-0" />
-                <div className="flex flex-col items-start gap-0.5 flex-1">
-                  <span className="font-medium">Business Information</span>
-                  <span className="text-xs opacity-70">Profile & details</span>
-                </div>
-              </div>
-            </TabsTrigger>
-            <TabsTrigger
               value="reviews"
-              className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
+              className="w-full justify-start rounded-md data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
               <div className="flex items-start gap-3 w-full">
                 <Star className="h-5 w-5 mt-0.5 flex-shrink-0" />
@@ -1053,7 +926,7 @@ export default function BusinessDetailPage() {
             </TabsTrigger>
             <TabsTrigger
               value="settings"
-              className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
+              className="w-full justify-start rounded-md data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
               <div className="flex items-start gap-3 w-full">
                 <Settings className="h-5 w-5 mt-0.5 flex-shrink-0" />
@@ -1066,23 +939,13 @@ export default function BusinessDetailPage() {
           </TabsList>
 
           <div className="flex-1 min-w-0">
-          {/* Business Information Tab */}
+          {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6 mt-0">
             <OverviewTab
-              business={business}
-              handleUpdateBusiness={handleUpdateBusiness}
-              handleSaveChanges={handleSaveChanges}
-              website={website}
-              setWebsite={setWebsite}
-              suggestedCategories={suggestedCategories}
-              categorySuggestions={categorySuggestions}
-              serviceInput={serviceInput}
-              setServiceInput={setServiceInput}
-              showServiceSuggestions={showServiceSuggestions}
-              setShowServiceSuggestions={setShowServiceSuggestions}
-              getServiceSuggestions={getServiceSuggestions}
-              handleAddServiceEnhanced={handleAddServiceEnhanced}
-              handleRemoveService={handleRemoveService}
+              businessName={business?.name}
+              businessId={business?.id ?? businessSlug}
+              isLoading={isLoading}
+              onViewGbpReport={() => handleMainTabChange("gmb-health")}
             />
           </TabsContent>
 
@@ -1090,25 +953,25 @@ export default function BusinessDetailPage() {
           <TabsContent value="settings" className="space-y-6 mt-0">
             <Tabs value={settingsSubTab} onValueChange={handleSettingsSubChange} className="w-full">
               {/* Horizontal tab bar: pill style with icons for quick scanning */}
-              <div className="rounded-xl border border-border/80 bg-muted/30 p-1.5 shadow-sm">
+              <div className="rounded-xl border border-border/80 bg-white p-1.5 shadow-sm">
                 <TabsList className="flex flex-row h-auto gap-1.5 p-0 bg-transparent border-0 shadow-none w-full">
                   <TabsTrigger
                     value="links"
-                    className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
+                    className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
                   >
                     <Link2 className="h-4 w-4 shrink-0" />
                     <span className="truncate">Links & QR</span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="auto-reply"
-                    className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
+                    className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
                   >
                     <Bot className="h-4 w-4 shrink-0" />
                     <span className="truncate">Auto Reply</span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="payment"
-                    className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
+                    className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
                   >
                     <CreditCard className="h-4 w-4 shrink-0" />
                     <span className="truncate">Payment</span>

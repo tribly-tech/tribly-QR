@@ -1,412 +1,1043 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Plus, X } from "lucide-react";
-import { Business, BusinessCategory } from "@/lib/types";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  ArrowUpRight,
+  CheckCircle2,
+  Loader2,
+  MapPin,
+  TriangleAlert,
+  Unplug,
+} from "lucide-react";
 
-interface OverviewTabProps {
-  business: Business | null;
-  handleUpdateBusiness: (updates: Partial<Business>) => void;
-  handleSaveChanges: (section: string) => void;
-  website: string;
-  setWebsite: (value: string) => void;
-  suggestedCategories: BusinessCategory[];
-  categorySuggestions: Record<string, string[]>;
-  serviceInput: string;
-  setServiceInput: (value: string) => void;
-  showServiceSuggestions: boolean;
-  setShowServiceSuggestions: (value: boolean) => void;
-  getServiceSuggestions: string[];
-  handleAddServiceEnhanced: (service: string) => void;
-  handleRemoveService: (service: string) => void;
+type TimeRange = "Week" | "Month" | "Quarterly" | "Half-yearly" | "Yearly";
+type PlatformStatus = "connected" | "not_connected" | "reconnect" | "syncing";
+
+interface PlatformMetric {
+  label: string;
+  value: string;
+  delta?: string;
 }
 
-export function OverviewTab({
-  business,
-  handleUpdateBusiness,
-  handleSaveChanges,
-  website,
-  setWebsite,
-  suggestedCategories,
-  categorySuggestions,
-  serviceInput,
-  setServiceInput,
-  showServiceSuggestions,
-  setShowServiceSuggestions,
-  getServiceSuggestions,
-  handleAddServiceEnhanced,
-  handleRemoveService,
-}: OverviewTabProps) {
+interface SocialPlatformData {
+  key: string;
+  name: string;
+  icon: JSX.Element;
+  status: PlatformStatus;
+  lastSync: string;
+  engagementGrowth: number;
+  miniChart: number[];
+  commonMetrics: PlatformMetric[];
+  platformMetrics: PlatformMetric[];
+  highlights: string[];
+}
+
+interface GbpData {
+  name: string;
+  icon: JSX.Element;
+  status: PlatformStatus;
+  lastSync: string;
+  engagementGrowth: number;
+  miniChart: number[];
+  primaryMetrics: PlatformMetric[];
+  secondaryMetrics: PlatformMetric[];
+  highlights: string[];
+}
+
+interface OverviewTabProps {
+  businessName?: string | null;
+  businessId?: string | null;
+  isLoading?: boolean;
+  error?: string | null;
+  /** Called when user clicks "View full report" in the GBP section; e.g. navigate to Google Business Health tab */
+  onViewGbpReport?: () => void;
+}
+
+const TIME_RANGES: TimeRange[] = ["Week", "Month", "Quarterly", "Half-yearly", "Yearly"];
+
+/** Multipliers for volume metrics by time range (Month = 1). Chart length and growth variation. */
+const TIME_RANGE_CONFIG: Record<
+  TimeRange,
+  { volumeMultiplier: number; chartPoints: number; growthMultiplier: number; label: string }
+> = {
+  Week: { volumeMultiplier: 0.25, chartPoints: 7, growthMultiplier: 0.4, label: "Last 7 days" },
+  Month: { volumeMultiplier: 1, chartPoints: 8, growthMultiplier: 1, label: "Last 30 days" },
+  Quarterly: { volumeMultiplier: 3, chartPoints: 12, growthMultiplier: 1.15, label: "Last 3 months" },
+  "Half-yearly": { volumeMultiplier: 6, chartPoints: 24, growthMultiplier: 1.25, label: "Last 6 months" },
+  Yearly: { volumeMultiplier: 12, chartPoints: 52, growthMultiplier: 1.4, label: "Last 12 months" },
+};
+
+function parseMetricNumber(value: string): number | null {
+  const cleaned = value.replace(/,/g, "").trim().replace(/^[+\-]/, "");
+  const match = cleaned.match(/^([\d.]+)\s*(K|M|k|m|%|hrs?)?$/i);
+  if (!match) return null;
+  let n = parseFloat(match[1]);
+  if (Number.isNaN(n)) return null;
+  const suffix = (match[2] || "").toUpperCase();
+  if (suffix === "K") n *= 1e3;
+  else if (suffix === "M") n *= 1e6;
+  if (value.trim().startsWith("-")) n = -n;
+  return n;
+}
+
+function formatMetricDisplay(num: number, original: string): string {
+  const suffix = original.replace(/[\d.,\s]/g, "").trim() || "";
+  if (suffix.toUpperCase() === "K" || (num >= 1000 && num < 1e6))
+    return num >= 1000 ? `${(num / 1000).toFixed(1)}K` : String(Math.round(num));
+  if (suffix.toUpperCase() === "M" || num >= 1e6) return `${(num / 1e6).toFixed(1)}M`;
+  if (suffix === "%") return `${num.toFixed(1)}%`;
+  if (/hrs?/i.test(original)) return `${Math.round(num)} hrs`;
+  if (num % 1 !== 0) return num.toFixed(1);
+  return String(Math.round(num));
+}
+
+function scaleMetrics(metrics: PlatformMetric[], volumeMultiplier: number, growthMultiplier: number): PlatformMetric[] {
+  return metrics.map((m) => {
+    const parsed = parseMetricNumber(m.value);
+    const isRating = /rating|avg/i.test(m.label) || (parsed !== null && parsed <= 5 && !m.value.includes("K"));
+    if (parsed === null || isRating) return m;
+    const scaled = parsed * volumeMultiplier;
+    const newValue = formatMetricDisplay(scaled, m.value);
+    let newDelta = m.delta;
+    if (m.delta && growthMultiplier !== 1) {
+      const d = parseMetricNumber(m.delta);
+      if (d !== null) {
+        const scaled = d * growthMultiplier;
+        const sign = scaled >= 0 ? "+" : "";
+        newDelta = `${sign}${Number(scaled.toFixed(1))}%`;
+      }
+    }
+    return { ...m, value: newValue, delta: newDelta };
+  });
+}
+
+function scaleChart(data: number[], timeRange: TimeRange): number[] {
+  const { chartPoints, volumeMultiplier } = TIME_RANGE_CONFIG[timeRange];
+  if (data.length === 0) return data;
+  const base = [...data];
+  if (base.length >= chartPoints) {
+    const out = base.slice(-chartPoints).map((v) => Math.round(v * volumeMultiplier));
+    return out.length ? out : base.map((v) => Math.round(v * volumeMultiplier));
+  }
+  const out: number[] = [];
+  for (let i = 0; i < chartPoints; i++) {
+    const idx = (i / (chartPoints - 1)) * (base.length - 1);
+    const lo = Math.floor(idx);
+    const hi = Math.min(lo + 1, base.length - 1);
+    const v = base[lo] + (base[hi] - base[lo]) * (idx - lo);
+    out.push(Math.max(0, Math.round(v * volumeMultiplier)));
+  }
+  return out;
+}
+
+function applyTimeRangeToGbp(gbp: GbpData | null, timeRange: TimeRange): GbpData | null {
+  if (!gbp) return null;
+  const cfg = TIME_RANGE_CONFIG[timeRange];
+  return {
+    ...gbp,
+    engagementGrowth: Math.max(0, Number((gbp.engagementGrowth * cfg.growthMultiplier).toFixed(1))),
+    primaryMetrics: scaleMetrics(gbp.primaryMetrics, cfg.volumeMultiplier, cfg.growthMultiplier),
+    secondaryMetrics: scaleMetrics(gbp.secondaryMetrics, cfg.volumeMultiplier, cfg.growthMultiplier),
+    miniChart: scaleChart(Array.isArray(gbp.miniChart) ? gbp.miniChart : [], timeRange),
+  };
+}
+
+function applyTimeRangeToPlatform(platform: SocialPlatformData, timeRange: TimeRange): SocialPlatformData {
+  const cfg = TIME_RANGE_CONFIG[timeRange];
+  return {
+    ...platform,
+    engagementGrowth: Math.max(0, Number((platform.engagementGrowth * cfg.growthMultiplier).toFixed(1))),
+    commonMetrics: scaleMetrics(platform.commonMetrics ?? [], cfg.volumeMultiplier, cfg.growthMultiplier),
+    platformMetrics: scaleMetrics(platform.platformMetrics ?? [], cfg.volumeMultiplier, cfg.growthMultiplier),
+    miniChart: scaleChart(Array.isArray(platform.miniChart) ? platform.miniChart : [], timeRange),
+  };
+}
+
+/** Platform brand colors for Login buttons */
+const PLATFORM_BUTTON_STYLES: Record<string, string> = {
+  instagram:
+    "bg-[#E4405F] text-white hover:bg-[#E4405F]/90 focus-visible:ring-[#E4405F] border-0",
+  youtube:
+    "bg-[#FF0000] text-white hover:bg-[#FF0000]/90 focus-visible:ring-[#FF0000] border-0",
+  facebook:
+    "bg-[#1877F2] text-white hover:bg-[#1877F2]/90 focus-visible:ring-[#1877F2] border-0",
+  linkedin:
+    "bg-[#0A66C2] text-white hover:bg-[#0A66C2]/90 focus-visible:ring-[#0A66C2] border-0",
+};
+
+const formatDelta = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
+
+const getStatusBadge = (status: PlatformStatus) => {
+  switch (status) {
+    case "connected":
+      return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Connected</Badge>;
+    case "syncing":
+      return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">Syncing</Badge>;
+    case "reconnect":
+      return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Reconnect</Badge>;
+    default:
+      return <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100">Not connected</Badge>;
+  }
+};
+
+const performanceChartConfig = {
+  value: {
+    label: "Performance",
+    color: "hsl(var(--primary))",
+  },
+} satisfies ChartConfig;
+
+function PerformanceTrendChart({ data, className }: { data: number[]; className?: string }) {
+  const chartData = useMemo(
+    () => (Array.isArray(data) ? data : []).map((value, i) => ({ period: `${i + 1}`, value: Number(value) || 0 })),
+    [data]
+  );
+  if (chartData.length === 0) {
+    return (
+      <div className={className} style={{ minHeight: 160 }}>
+        <div className="flex h-full min-h-[140px] items-center justify-center rounded-lg border border-dashed border-border/60 bg-muted/20 text-sm text-muted-foreground">
+          No trend data for this period
+        </div>
+      </div>
+    );
+  }
+  return (
+    <ChartContainer config={performanceChartConfig} className={className}>
+      <AreaChart data={chartData} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
+        <XAxis
+          dataKey="period"
+          tickLine={false}
+          axisLine={false}
+          tickMargin={8}
+          tickFormatter={(v) => `P${v}`}
+        />
+        <YAxis hide />
+        <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+        <Area
+          type="monotone"
+          dataKey="value"
+          stroke="hsl(var(--primary))"
+          fill="hsl(var(--primary))"
+          fillOpacity={0.2}
+          strokeWidth={2}
+        />
+      </AreaChart>
+    </ChartContainer>
+  );
+}
+
+const Sparkline = ({ data }: { data: number[] }) => {
+  const safeData = Array.isArray(data) && data.length > 0 ? data : [0];
+  const max = Math.max(...safeData, 1);
+  return (
+    <div className="flex items-end gap-1 h-12" aria-hidden>
+      {safeData.map((value, index) => (
+        <div
+          key={`${value}-${index}`}
+          className="flex-1 rounded-full bg-gradient-to-t from-primary/40 to-primary"
+          style={{ height: `${Math.max(15, (Number(value) / max) * 100)}%` }}
+        />
+      ))}
+    </div>
+  );
+};
+
+/** GBP metrics grouped for intuitive scanning */
+const GBP_DISCOVERY = ["Searches", "Search views", "Maps views"] as const;
+const GBP_ACTIONS = ["Calls", "Directions", "Website clicks"] as const;
+const GBP_ENGAGEMENT = ["Reviews", "Avg rating", "Photo views"] as const;
+
+const buildInitialGbp = (businessName: string): GbpData => ({
+  name: "Google Business Profile",
+  icon: <MapPin className="h-5 w-5 text-primary" />,
+  status: "connected",
+  lastSync: "Just now",
+  engagementGrowth: 13.8,
+  miniChart: [22, 26, 30, 28, 34, 41, 39, 46],
+  primaryMetrics: [
+    { label: "Searches", value: "12.4K", delta: "+11%" },
+    { label: "Calls", value: "312", delta: "+9%" },
+    { label: "Directions", value: "184", delta: "+6%" },
+    { label: "Website clicks", value: "402", delta: "+12%" },
+  ],
+  secondaryMetrics: [
+    { label: "Search views", value: "5.6K", delta: "+8%" },
+    { label: "Maps views", value: "3.1K", delta: "+6%" },
+    { label: "Reviews", value: "146", delta: "+3%" },
+    { label: "Avg rating", value: "4.6", delta: "+0.1" },
+    { label: "Photo views", value: "9.8K", delta: "+10%" },
+  ],
+  highlights: [
+    `${businessName} appears in the top 3 local pack results for high-intent searches.`,
+    "Most conversion actions happen between 12pm and 3pm.",
+  ],
+});
+
+const buildInitialSocialPlatforms = (businessName: string): SocialPlatformData[] => [
+  {
+    key: "instagram",
+    name: "Instagram",
+    icon: <img src="/assets/instagram-logo.png" alt="Instagram" className="h-5 w-5 object-contain" />,
+    status: "connected",
+    lastSync: "2 min ago",
+    engagementGrowth: 19.7,
+    miniChart: [10, 12, 15, 14, 18, 21, 24, 26],
+    commonMetrics: [
+      { label: "Posts published", value: "22", delta: "+9%" },
+      { label: "Engagement", value: "5.4K", delta: "+18%" },
+      { label: "Impressions", value: "62.1K", delta: "+14%" },
+      { label: "Reach", value: "31.4K", delta: "+16%" },
+      { label: "Followers", value: "12.7K", delta: "+5%" },
+    ],
+    platformMetrics: [
+      { label: "Profile visits", value: "3.4K", delta: "+12%" },
+      { label: "Reels reach", value: "18.2K", delta: "+22%" },
+      { label: "Saves", value: "640", delta: "+7%" },
+    ],
+    highlights: [
+      "Reels featuring product demos drive the highest reach.",
+      "Stories with polls increase profile visits by 2x.",
+    ],
+  },
+  {
+    key: "youtube",
+    name: "YouTube",
+    icon: <img src="/assets/youtube-logo.png" alt="YouTube" className="h-5 w-5 object-contain" />,
+    status: "reconnect",
+    lastSync: "2 days ago",
+    engagementGrowth: 6.1,
+    miniChart: [6, 8, 7, 10, 12, 9, 11, 13],
+    commonMetrics: [
+      { label: "Posts published", value: "6", delta: "+4%" },
+      { label: "Engagement", value: "1.2K", delta: "+6%" },
+      { label: "Impressions", value: "18.9K", delta: "+3%" },
+      { label: "Reach", value: "12.4K", delta: "+2%" },
+      { label: "Subscribers", value: "4.9K", delta: "+2%" },
+    ],
+    platformMetrics: [
+      { label: "Views", value: "14.1K", delta: "+5%" },
+      { label: "Watch time", value: "118 hrs", delta: "+8%" },
+      { label: "CTR", value: "4.6%", delta: "+0.4%" },
+    ],
+    highlights: [
+      "Short-form videos are trending with 2.4x engagement.",
+      "Reconnect to refresh watch time and CTR insights.",
+    ],
+  },
+  {
+    key: "facebook",
+    name: "Facebook",
+    icon: <img src="/assets/facebook-logo.png" alt="Facebook" className="h-5 w-5 object-contain" />,
+    status: "connected",
+    lastSync: "8 min ago",
+    engagementGrowth: 8.9,
+    miniChart: [9, 10, 12, 11, 13, 15, 17, 16],
+    commonMetrics: [
+      { label: "Posts published", value: "18", delta: "+6%" },
+      { label: "Engagement", value: "3.1K", delta: "+9%" },
+      { label: "Impressions", value: "38.4K", delta: "+8%" },
+      { label: "Reach", value: "22.6K", delta: "+6%" },
+      { label: "Followers", value: "9.8K", delta: "+4%" },
+    ],
+    platformMetrics: [
+      { label: "Page visits", value: "2.1K", delta: "+7%" },
+      { label: "Post clicks", value: "1.4K", delta: "+5%" },
+      { label: "Shares", value: "286", delta: "+3%" },
+    ],
+    highlights: [
+      "Local posts outperform by 22% engagement rate.",
+      "Carousel posts drive the highest click-through.",
+    ],
+  },
+  {
+    key: "linkedin",
+    name: "LinkedIn",
+    icon: <img src="/assets/linkedin-logo.png" alt="LinkedIn" className="h-5 w-5 object-contain" />,
+    status: "not_connected",
+    lastSync: "Not synced yet",
+    engagementGrowth: 0,
+    miniChart: [2, 3, 2, 4, 3, 3, 2, 4],
+    commonMetrics: [
+      { label: "Posts published", value: "0", delta: "0%" },
+      { label: "Engagement", value: "0", delta: "0%" },
+      { label: "Impressions", value: "0", delta: "0%" },
+      { label: "Reach", value: "0", delta: "0%" },
+      { label: "Followers", value: "0", delta: "0%" },
+    ],
+    platformMetrics: [
+      { label: "Company views", value: "-", delta: "" },
+      { label: "Job clicks", value: "-", delta: "" },
+      { label: "Lead clicks", value: "-", delta: "" },
+    ],
+    highlights: [
+      "Connect to unlock B2B visibility and lead intent.",
+      "LinkedIn helps your team showcase credibility.",
+    ],
+  },
+];
+
+const DEFAULT_BUSINESS_NAME = "Your business";
+
+const DISCONNECT_SIMULATE_MS = 800;
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+
+export function OverviewTab({ businessName, businessId, isLoading = false, error = null, onViewGbpReport }: OverviewTabProps) {
+  const name = businessName?.trim() || DEFAULT_BUSINESS_NAME;
+  const [timeRange, setTimeRange] = useState<TimeRange>("Month");
+  const [gbp, setGbp] = useState<GbpData>(() => buildInitialGbp(name));
+  const [socialPlatforms, setSocialPlatforms] = useState<SocialPlatformData[]>(() =>
+    buildInitialSocialPlatforms(name)
+  );
+  const [lastSynced, setLastSynced] = useState<Date>(() => new Date());
+  const [platformActionLoading, setPlatformActionLoading] = useState<Record<string, boolean>>({});
+  const [platformActionError, setPlatformActionError] = useState<Record<string, string | null>>({});
+  const [disconnectConfirmKey, setDisconnectConfirmKey] = useState<string | null>(null);
+  const [disconnectLoading, setDisconnectLoading] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSocialPlatforms((prev) => {
+        if (!Array.isArray(prev)) return prev;
+        return prev.map((platform) => {
+          if (platform?.status !== "connected") return platform;
+          const chart = Array.isArray(platform.miniChart) ? platform.miniChart : [];
+          const lastVal = chart.length > 0 ? chart[chart.length - 1] : 0;
+          const jitter = (Math.random() - 0.45) * 2;
+          const nextGrowth = Math.max(0, Number(platform.engagementGrowth) + jitter);
+          return {
+            ...platform,
+            engagementGrowth: Number(nextGrowth.toFixed(1)),
+            lastSync: "Just now",
+            miniChart: chart.length > 0 ? [...chart.slice(1), Math.max(4, lastVal + jitter * 2)] : chart,
+          };
+        });
+      });
+      setGbp((prev) => {
+        if (!prev || prev.status !== "connected") return prev;
+        const chart = Array.isArray(prev.miniChart) ? prev.miniChart : [];
+        const lastVal = chart.length > 0 ? chart[chart.length - 1] : 0;
+        const jitter = (Math.random() - 0.45) * 2;
+        const nextGrowth = Math.max(0, Number(prev.engagementGrowth) + jitter);
+        return {
+          ...prev,
+          engagementGrowth: Number(nextGrowth.toFixed(1)),
+          lastSync: "Just now",
+          miniChart: chart.length > 0 ? [...chart.slice(1), Math.max(6, lastVal + jitter * 2)] : chart,
+        };
+      });
+      setLastSynced(new Date());
+    }, 8000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const filteredGbp = useMemo(() => applyTimeRangeToGbp(gbp, timeRange), [gbp, timeRange]);
+  const filteredSocialPlatforms = useMemo(
+    () => (Array.isArray(socialPlatforms) ? socialPlatforms : []).map((p) => applyTimeRangeToPlatform(p, timeRange)),
+    [socialPlatforms, timeRange]
+  );
+
+  const summary = useMemo(() => {
+    const connectedSocial = filteredSocialPlatforms.filter((p) => p.status === "connected");
+    const connectedEntities = [
+      ...(filteredGbp?.status === "connected" ? [{ name: filteredGbp.name, engagementGrowth: filteredGbp.engagementGrowth }] : []),
+      ...connectedSocial.map((p) => ({ name: p.name, engagementGrowth: p.engagementGrowth })),
+    ];
+    const connected = connectedSocial.length + (filteredGbp?.status === "connected" ? 1 : 0);
+    const growthValues = connectedEntities.map((e) => e.engagementGrowth);
+    const averageGrowth =
+      growthValues.length > 0
+        ? growthValues.reduce((sum, v) => sum + v, 0) / growthValues.length
+        : 0;
+    const best =
+      connectedEntities.length > 0
+        ? connectedEntities.reduce((prev, cur) =>
+            cur.engagementGrowth > prev.engagementGrowth ? cur : prev
+          )
+        : null;
+    return {
+      connected,
+      totalPlatforms: filteredSocialPlatforms.length + 1,
+      averageGrowth: Number.isFinite(averageGrowth) ? averageGrowth : 0,
+      bestPlatform: best?.name ?? "—",
+    };
+  }, [filteredGbp, filteredSocialPlatforms]);
+
+  const connectedSocialPlatforms = useMemo(
+    () => filteredSocialPlatforms.filter((platform) => platform.status === "connected"),
+    [filteredSocialPlatforms]
+  );
+
+  const disconnectedSocialPlatforms = useMemo(
+    () => filteredSocialPlatforms.filter((platform) => platform.status !== "connected"),
+    [filteredSocialPlatforms]
+  );
+
+  const isPlatformLoading = (key: string) => !!platformActionLoading[key];
+  const getPlatformError = (key: string) => platformActionError[key] ?? null;
+  const clearPlatformError = (key: string) => setPlatformActionError((prev) => ({ ...prev, [key]: null }));
+
+  const getPlatformAuthUrl = (platformKey: string): string => {
+    const base = `${API_BASE}/dashboard/v1/connect/${platformKey}`;
+    const params = new URLSearchParams();
+    if (businessId) params.set("business_id", businessId);
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
+  };
+
+  const handleConnect = (platformKey: string) => {
+    if (isPlatformLoading(platformKey)) return;
+    setPlatformActionLoading((prev) => ({ ...prev, [platformKey]: true }));
+    setPlatformActionError((prev) => ({ ...prev, [platformKey]: null }));
+    const authUrl = getPlatformAuthUrl(platformKey);
+    window.location.href = authUrl;
+  };
+
+  const handleDisconnectConfirm = async () => {
+    const key = disconnectConfirmKey;
+    if (!key) return;
+    setDisconnectLoading(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, DISCONNECT_SIMULATE_MS));
+      setSocialPlatforms((prev) =>
+        prev.map((p) =>
+          p.key === key
+            ? {
+                ...p,
+                status: "not_connected" as const,
+                lastSync: "Not synced yet",
+                engagementGrowth: 0,
+                commonMetrics: (p.commonMetrics ?? []).map((m) => ({ ...m, value: "0", delta: "0%" })),
+                platformMetrics: (p.platformMetrics ?? []).map((m) => ({ ...m, value: "-", delta: "" })),
+                miniChart: [2, 3, 2, 4, 3, 3, 2, 4],
+              }
+            : p
+        )
+      );
+      setLastSynced(new Date());
+      setDisconnectConfirmKey(null);
+    } finally {
+      setDisconnectLoading(false);
+    }
+  };
+
+  const disconnectPlatform = socialPlatforms.find((p) => p.key === disconnectConfirmKey);
+
+  const lastSyncedLabel =
+    lastSynced && !Number.isNaN(lastSynced.getTime())
+      ? lastSynced.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+      : "—";
+
+  if (error) {
+    return (
+      <Card className="border-destructive/50">
+        <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+          <TriangleAlert className="h-12 w-12 text-destructive mb-4" />
+          <h3 className="text-lg font-semibold">Something went wrong</h3>
+          <p className="text-sm text-muted-foreground mt-2 max-w-md">{error}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6 mt-0">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="h-16 w-64 rounded-lg bg-muted animate-pulse" />
+          <div className="h-10 w-full md:w-80 rounded-xl bg-muted animate-pulse" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardHeader>
+                <div className="h-4 w-32 rounded bg-muted animate-pulse" />
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 w-20 rounded bg-muted animate-pulse" />
+                <div className="h-3 w-40 rounded bg-muted animate-pulse mt-2" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card>
+          <CardContent className="py-12">
+            <div className="h-48 rounded-lg bg-muted animate-pulse w-full" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 mt-0">
-      {/* Basic Information Section */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-semibold">Business Health Overview</h2>
+            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Live sync</Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Unified snapshot of your Google Business Profile and social performance.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-white p-1.5 shadow-sm">
+          {TIME_RANGES.map((range) => (
+            <Button
+              key={range}
+              variant="ghost"
+              size="sm"
+              className={`rounded-lg ${
+                timeRange === range
+                  ? "bg-primary/10 text-primary ring-1 ring-primary/60 shadow-sm hover:bg-primary/15 hover:text-primary"
+                  : ""
+              }`}
+              onClick={() => setTimeRange(range)}
+            >
+              {range}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total connected platforms</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-end gap-2">
+              <span className="text-3xl font-semibold">{summary.connected}</span>
+              <span className="text-sm text-muted-foreground">of {summary.totalPlatforms}</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">Sync status updated {lastSyncedLabel}</p>
+          </CardContent>
+        </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Basic Information</CardTitle>
-          <CardDescription>
-            Enter the essential details about the business
-          </CardDescription>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Overall engagement growth</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">
-                Business Name <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="name"
-                placeholder="e.g., The Coffee House"
-                value={business?.name || ""}
-                onChange={(e) => handleUpdateBusiness({ name: e.target.value })}
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                Enter the official business name as it appears on legal documents
-              </p>
+            <div className="flex items-center gap-2">
+              <span className="text-3xl font-semibold">{summary.averageGrowth.toFixed(1)}%</span>
+              <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">+{timeRange}</Badge>
             </div>
-
-            {/* Dotted Separator */}
-            <div className="relative my-2">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-dotted border-muted-foreground/30"></div>
+            <p className="text-xs text-muted-foreground mt-2">Across connected platforms</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Best performing platform</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-semibold">{summary.bestPlatform}</div>
+            {summary.connected > 0 ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
+                <ArrowUpRight className="h-4 w-4 text-emerald-500" />
+                {formatDelta(summary.averageGrowth)} avg engagement lift
               </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="website">Website</Label>
-              <Input
-                id="website"
-                type="url"
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-                placeholder="https://www.example.com"
-              />
+            ) : (
+              <p className="text-xs text-muted-foreground mt-2">Connect a platform to see performance.</p>
+            )}
+          </CardContent>
+        </Card>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="category">
-                Business Category <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={business?.category || ""}
-                onValueChange={(value) => {
-                  handleUpdateBusiness({ category: value as BusinessCategory });
-                  setServiceInput("");
-                }}
-              >
-                <SelectTrigger id="category">
-                  <SelectValue placeholder="Select business category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="restaurant">Restaurant</SelectItem>
-                  <SelectItem value="retail">Retail</SelectItem>
-                  <SelectItem value="healthcare">Healthcare</SelectItem>
-                  <SelectItem value="beauty">Beauty</SelectItem>
-                  <SelectItem value="fitness">Fitness</SelectItem>
-                  <SelectItem value="automotive">Automotive</SelectItem>
-                  <SelectItem value="real-estate">Real Estate</SelectItem>
-                  <SelectItem value="education">Education</SelectItem>
-                  <SelectItem value="hospitality">Hospitality</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Category Suggestions */}
-              {suggestedCategories.length > 0 && !business?.category && (
-                <div className="mt-2">
-                  <p className="text-xs text-muted-foreground mb-2">Suggested categories:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {suggestedCategories.map((cat) => (
-                      <Badge
-                        key={cat}
-                        variant="outline"
-                        className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                        onClick={() => handleUpdateBusiness({ category: cat })}
-                      >
-                        {cat.split("-").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ")}
-                      </Badge>
-                    ))}
-                  </div>
+      <div className="space-y-6">
+        {/* Google Business Profile — redesigned for clarity and scanability */}
+        <Card className="overflow-hidden border-0 bg-white shadow-sm ring-1 ring-border/60">
+          <div className="bg-gradient-to-r from-primary/5 via-transparent to-primary/5 px-6 pt-5 pb-1">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/10">
+                  {gbp.icon}
                 </div>
-              )}
-
-              {/* Category-specific suggestions */}
-              {business?.category && categorySuggestions[business.category] && (
-                <div className="mt-2">
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Common types for {business.category}:
+                <div>
+                  <h3 className="text-lg font-semibold tracking-tight">Google Business Profile</h3>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Local discovery and customer actions
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    {categorySuggestions[business.category].slice(0, 5).map((suggestion) => (
-                      <Badge
-                        key={suggestion}
-                        variant="secondary"
-                        className="text-xs"
-                      >
-                        {suggestion}
-                      </Badge>
-                    ))}
+                  <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>Synced {gbp?.lastSync ?? "—"} · {TIME_RANGE_CONFIG[timeRange].label}</span>
+                    <span className="text-border">·</span>
+                    <span>{lastSyncedLabel}</span>
                   </div>
                 </div>
-              )}
-
-              <p className="text-xs text-muted-foreground">
-                Select the primary category that best describes the business
-              </p>
             </div>
-
-            {/* Dotted Separator */}
-            <div className="relative my-2">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-dotted border-muted-foreground/30"></div>
+                <div className="flex flex-wrap items-center gap-2">
+                {getStatusBadge(gbp.status)}
+                <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-700">
+                  {Number(filteredGbp?.engagementGrowth ?? gbp?.engagementGrowth ?? 0).toFixed(1)}% growth
+                </span>
+                <Button variant="ghost" size="sm" className="text-primary hover:text-primary/90" onClick={() => onViewGbpReport?.()}>
+                  View full report →
+                </Button>
               </div>
             </div>
-
-            {/* Services Section */}
-            <div className="grid gap-2">
-              <Label htmlFor="services">Business Services</Label>
-              <div className="relative service-input-container">
-                <Input
-                  id="services"
-                  placeholder={business?.category ? `Add a service (e.g., ${getServiceSuggestions[0] || "Service name"})` : "Select a category first to see suggestions"}
-                  value={serviceInput}
-                  onChange={(e) => {
-                    setServiceInput(e.target.value);
-                    setShowServiceSuggestions(e.target.value.length > 0 && getServiceSuggestions.length > 0);
-                  }}
-                  onFocus={() => {
-                    if (getServiceSuggestions.length > 0) {
-                      setShowServiceSuggestions(true);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && serviceInput.trim()) {
-                      e.preventDefault();
-                      handleAddServiceEnhanced(serviceInput);
-                    }
-                  }}
-                  disabled={!business?.category}
-                />
-
-                {/* Service Suggestions Dropdown */}
-                {showServiceSuggestions && getServiceSuggestions.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-auto top-full service-suggestions-dropdown">
-                    {getServiceSuggestions
-                      .filter((suggestion) =>
-                        suggestion.toLowerCase().includes(serviceInput.toLowerCase())
-                      )
-                      .map((suggestion) => (
-                        <div
-                          key={suggestion}
-                          className="p-2 hover:bg-muted cursor-pointer border-b last:border-b-0"
-                          onClick={() => handleAddServiceEnhanced(suggestion)}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Plus className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm">{suggestion}</span>
+          </div>
+          <CardContent className="px-6 pt-5 pb-6">
+            {gbp?.status === "connected" ? (
+              <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+                <div className="space-y-6">
+                  {(() => {
+                    const all = [...(filteredGbp?.primaryMetrics ?? []), ...(filteredGbp?.secondaryMetrics ?? [])];
+                    const byLabel = Object.fromEntries(all.map((m) => [m.label, m]));
+                    const discovery = GBP_DISCOVERY.map((l) => byLabel[l]).filter(Boolean);
+                    const actions = GBP_ACTIONS.map((l) => byLabel[l]).filter(Boolean);
+                    const engagement = GBP_ENGAGEMENT.map((l) => byLabel[l]).filter(Boolean);
+                    const renderGroup = (title: string, metrics: PlatformMetric[]) => (
+                      <div key={title}>
+                        <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          {title}
+                        </p>
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          {metrics.map((m) => (
+                            <div
+                              key={m.label}
+                              className="flex flex-col justify-center rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5"
+                            >
+                              <span className="text-xs text-muted-foreground">{m.label}</span>
+                              <div className="mt-0.5 flex items-baseline gap-2">
+                                <span className="text-base font-semibold tabular-nums">{m.value}</span>
+                                {m.delta && (
+                                  <span className="text-xs font-medium text-emerald-600">{m.delta}</span>
+                                )}
                           </div>
                         </div>
                       ))}
-                    {serviceInput.trim() && !getServiceSuggestions.some(s => s.toLowerCase() === serviceInput.toLowerCase()) && (
-                      <div
-                        className="p-2 hover:bg-muted cursor-pointer border-t"
-                        onClick={() => handleAddServiceEnhanced(serviceInput)}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Plus className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm">Add "{serviceInput}"</span>
                         </div>
                       </div>
+                    );
+                    return (
+                      <>
+                        {renderGroup("Discovery", discovery)}
+                        {renderGroup("Customer actions", actions)}
+                        {renderGroup("Engagement", engagement)}
+                      </>
+                    );
+                  })()}
+                </div>
+                <div className="space-y-4 rounded-xl border border-border/50 bg-muted/20 p-4 lg:border-l lg:bg-transparent">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Performance trend
+                    </p>
+                    <p className="mt-1 text-sm font-medium">Last 8 periods</p>
+                  </div>
+                  <PerformanceTrendChart data={filteredGbp?.miniChart ?? []} className="min-h-[160px] w-full" />
+                  <div className="border-t border-border/50 pt-4">
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
+                      Insights
+                    </p>
+                    <ul className="space-y-2">
+                      {gbp.highlights.map((h) => (
+                        <li key={h} className="flex gap-2 text-sm text-muted-foreground">
+                          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
+                          <span>{h}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/20 py-12 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                  {gbp.icon}
+                </div>
+                <p className="mt-3 font-medium">Google Business Profile is not connected</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Connect to see discovery, actions, and engagement metrics.
+                </p>
+                <Button
+                  size="sm"
+                  className="mt-4"
+                  variant="outline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {gbp.status === "reconnect" ? "Reconnect" : "Connect"}
+                </Button>
+                </div>
+              )}
+          </CardContent>
+        </Card>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold">Social media platforms</h3>
+            <p className="text-sm text-muted-foreground">Performance across connected social channels.</p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            Data synced {lastSyncedLabel}
+          </div>
+        </div>
+
+        <Card className="border-emerald-200/60 bg-emerald-50/40">
+          <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle>Connected platforms</CardTitle>
+              <CardDescription>Live performance data streaming in real time.</CardDescription>
+            </div>
+            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+              {connectedSocialPlatforms.length} Connected
+            </Badge>
+          </CardHeader>
+          <CardContent className="grid gap-4 lg:grid-cols-2">
+            {connectedSocialPlatforms.length === 0 ? (
+              <div className="col-span-full flex flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-white/60 py-10 text-center">
+                <CheckCircle2 className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                <p className="text-sm font-medium text-muted-foreground">No social platforms connected yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Connect platforms below to see performance here.</p>
+              </div>
+            ) : (
+              connectedSocialPlatforms.map((platform) => (
+              <Card
+                key={platform.key}
+                className="hover:shadow-md transition-shadow bg-white"
+              >
+                <CardHeader className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center overflow-hidden">
+                        {platform.icon}
+                      </div>
+                      <div>
+                        <CardTitle className="text-base">{platform.name}</CardTitle>
+                        <CardDescription>Last sync: {platform.lastSync}</CardDescription>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {getStatusBadge(platform.status)}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDisconnectConfirmKey(platform.key);
+                        }}
+                        title={`Disconnect ${platform.name}`}
+                      >
+                        <Unplug className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto] items-center">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Engagement growth</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl font-semibold">{platform.engagementGrowth.toFixed(1)}%</span>
+                        <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                          {formatDelta(platform.engagementGrowth)}
+                      </Badge>
+                      </div>
+                    </div>
+                    <Sparkline data={platform.miniChart} />
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {(platform.commonMetrics ?? []).map((metric) => (
+                      <div key={metric.label} className="rounded-lg border border-border/70 p-3">
+                        <p className="text-xs text-muted-foreground">{metric.label}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-semibold">{metric.value}</span>
+                          {metric.delta && (
+                            <span className="text-xs text-emerald-600">{metric.delta}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="rounded-xl bg-muted/40 p-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                      Platform-specific highlights
+                    </p>
+                    <div className="grid gap-2 md:grid-cols-3">
+                      {(platform.platformMetrics ?? []).map((metric) => (
+                        <div key={metric.label} className="text-xs">
+                          <p className="text-muted-foreground">{metric.label}</p>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-semibold">{metric.value}</span>
+                            {metric.delta && <span className="text-emerald-600">{metric.delta}</span>}
+            </div>
+          </div>
+                      ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+              ))
+            )}
+        </CardContent>
+      </Card>
+
+        <Card className="border-slate-200/70 bg-slate-50/60">
+          <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle>Needs connection</CardTitle>
+              <CardDescription>Link platforms to unlock real-time metrics.</CardDescription>
+            </div>
+            <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100">
+              {disconnectedSocialPlatforms.length} Pending
+            </Badge>
+          </CardHeader>
+          <CardContent className="grid gap-4 lg:grid-cols-2">
+            {disconnectedSocialPlatforms.length === 0 ? (
+              <div className="col-span-full flex flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-white/60 py-10 text-center">
+                <CheckCircle2 className="h-10 w-10 text-emerald-500/70 mb-3" />
+                <p className="text-sm font-medium text-muted-foreground">All social platforms connected</p>
+                <p className="text-xs text-muted-foreground mt-1">No pending connections.</p>
+              </div>
+            ) : (
+              disconnectedSocialPlatforms.map((platform) => (
+              <Card
+                key={platform.key}
+                className="hover:shadow-md transition-shadow border-dashed bg-white/70"
+              >
+                <CardHeader className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center">
+                        {platform.icon}
+                      </div>
+                      <div>
+                        <CardTitle className="text-base">{platform.name}</CardTitle>
+                        <CardDescription>Last sync: {platform.lastSync}</CardDescription>
+                      </div>
+                    </div>
+                    {getStatusBadge(platform.status)}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-xl border border-dashed border-border/70 p-3">
+                    <div className="flex items-start gap-2">
+                      <TriangleAlert className="h-4 w-4 text-amber-500 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium">
+                          {platform.status === "reconnect" ? "Reconnect to refresh data" : "Connect this platform"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Enable real-time syncing for accurate reporting.
+                        </p>
+              </div>
+            </div>
+          </div>
+                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
+                    {(platform.platformMetrics ?? []).map((metric) => (
+                      <div
+                        key={metric.label}
+                        className="rounded-lg border border-border/70 bg-white p-3 shadow-sm"
+                      >
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          {metric.label}
+                        </p>
+                        <div className="mt-1 flex flex-wrap items-baseline gap-2">
+                          <span className="text-lg font-semibold text-foreground">{metric.value}</span>
+                          {metric.delta && (
+                            <span className="text-xs font-medium text-emerald-600">{metric.delta}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {getPlatformError(platform.key) && (
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/50 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                      <span>{getPlatformError(platform.key)}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 shrink-0 text-destructive hover:bg-destructive/10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          clearPlatformError(platform.key);
+                        }}
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={`w-full ${PLATFORM_BUTTON_STYLES[platform.key] ?? ""}`}
+                    disabled={isPlatformLoading(platform.key)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleConnect(platform.key);
+                    }}
+                  >
+                    {isPlatformLoading(platform.key) ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Logging in with {platform.name}…
+                      </>
+                    ) : (
+                      `Login with ${platform.name}`
                     )}
-                  </div>
-                )}
-              </div>
-
-              {/* Service Suggestions */}
-              {business?.category && getServiceSuggestions.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-xs text-muted-foreground mb-2">Suggested business services:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {getServiceSuggestions.slice(0, 8).map((suggestion) => (
-                      <Badge
-                        key={suggestion}
-                        variant="outline"
-                        className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                        onClick={() => handleAddServiceEnhanced(suggestion)}
-                      >
-                        <Plus className="h-3 w-3 mr-1" />
-                        {suggestion}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Added Services */}
-              {business?.services && business.services.length > 0 && (
-                <div className="mt-3">
-                  <p className="text-xs text-muted-foreground mb-2">Added business services:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {business.services.map((service) => (
-                      <Badge
-                        key={service}
-                        variant="default"
-                        className="cursor-pointer"
-                        onClick={() => handleRemoveService(service)}
-                      >
-                        {service}
-                        <X className="h-3 w-3 ml-1" />
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <p className="text-xs text-muted-foreground">
-                {business?.category
-                  ? "Click on suggested business services or type to add custom services"
-                  : "Select a business category first to see business service suggestions"}
-              </p>
-            </div>
-          </div>
+                  </Button>
+                </CardContent>
+              </Card>
+            ))
+            )}
         </CardContent>
       </Card>
+      </div>
 
-      {/* Business Overview Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Business Overview</CardTitle>
-          <CardDescription>
-            Provide a brief description of the business
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="overview">Business Overview</Label>
-              <Textarea
-                id="overview"
-                placeholder="Describe the business, its services, specialties, and what makes it unique..."
-                value={business?.overview || ""}
-                onChange={(e) => handleUpdateBusiness({ overview: e.target.value })}
-                className="min-h-[120px] resize-none"
-              />
-              <p className="text-xs text-muted-foreground">
-                A brief description of the business that will be displayed on the business profile
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Contact Information Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Contact Information</CardTitle>
-          <CardDescription>
-            Provide contact details for the business
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="email">
-                Business Email <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="contact@business.com"
-                value={business?.email || ""}
-                onChange={(e) => handleUpdateBusiness({ email: e.target.value })}
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                Primary email address for business communications
-              </p>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input
-                id="phone"
-                type="tel"
-                placeholder="+91 98765 43210"
-                value={business?.phone || ""}
-                onChange={(e) => handleUpdateBusiness({ phone: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">
-                Include country code (e.g., +91 for India)
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Location Information Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Location Information</CardTitle>
-          <CardDescription>
-            Enter the physical location of the business
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="address">Street Address</Label>
-              <Input
-                id="address"
-                placeholder="123 Main Street, Building Name"
-                value={business?.address || ""}
-                onChange={(e) => handleUpdateBusiness({ address: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">
-                Complete street address including building number and name
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="city">City</Label>
-                <Input
-                  id="city"
-                  placeholder="Mumbai"
-                  value={business?.city || ""}
-                  onChange={(e) => handleUpdateBusiness({ city: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="area">Area / Locality</Label>
-                <Input
-                  id="area"
-                  placeholder="Bandra"
-                  value={business?.area || ""}
-                  onChange={(e) => handleUpdateBusiness({ area: e.target.value })}
-                />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Save Button */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex justify-end">
+      <Dialog
+        open={disconnectConfirmKey !== null}
+        onOpenChange={(open) => !disconnectLoading && !open && setDisconnectConfirmKey(null)}
+      >
+        <DialogContent className="max-w-sm" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Disconnect platform</DialogTitle>
+            <DialogDescription>
+              {disconnectPlatform
+                ? `Disconnect ${disconnectPlatform.name}? You can reconnect anytime. Real-time metrics will stop until you reconnect.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
             <Button
-              onClick={() => handleSaveChanges("Business information")}
-              className="gap-2"
+              variant="outline"
+              disabled={disconnectLoading}
+              onClick={() => setDisconnectConfirmKey(null)}
             >
-              <CheckCircle2 className="h-4 w-4" />
-              Save Changes
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={disconnectLoading}
+              onClick={handleDisconnectConfirm}
+            >
+              {disconnectLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Disconnecting…
+                </>
+              ) : (
+                "Disconnect"
+              )}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

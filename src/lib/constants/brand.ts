@@ -17,7 +17,7 @@ export const BRAND_COLORS = {
     mono: 'var(--font-geist-mono)',
   } as const;
   
-  export const BRAND_NAME = 'Tribly' as const;
+  export const BRAND_NAME = 'tribly.ai' as const;
   
   export const BRAND_TAGLINE = 'Your Products, Elevated' as const;
   
