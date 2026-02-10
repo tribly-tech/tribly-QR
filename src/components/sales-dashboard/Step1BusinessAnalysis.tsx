@@ -25,6 +25,90 @@ export interface LocationSuggestion {
   main_text: string;
   secondary_text: string;
   types?: string[];
+  distance_meters?: number; // May be returned when lat/lng is passed to the API
+}
+
+// ── Relevance scoring: ranks suggestions by keyword match + distance ──
+
+/**
+ * Score a suggestion against the user's query.
+ * Higher score = more relevant = shown first.
+ */
+function scoreRelevance(
+  suggestion: LocationSuggestion,
+  query: string,
+): number {
+  const q = query.toLowerCase().trim();
+  const name = suggestion.main_text.toLowerCase();
+  const desc = suggestion.description.toLowerCase();
+
+  let score = 0;
+
+  // ── Keyword matching (max ~100) ──
+
+  if (name === q) {
+    // Exact match – top priority
+    score += 100;
+  } else if (name.startsWith(q)) {
+    // Name starts with the full query
+    score += 80;
+  } else if (q.startsWith(name)) {
+    // Query contains the full business name
+    score += 70;
+  } else if (name.includes(q)) {
+    // Name contains the full query as a substring
+    score += 60;
+  } else {
+    // Word-level matching
+    const queryWords = q.split(/\s+/).filter((w) => w.length > 0);
+    const matched = queryWords.filter((w) => name.includes(w));
+    if (matched.length === queryWords.length && queryWords.length > 0) {
+      score += 50; // All words present
+    } else if (matched.length > 0) {
+      score += 20 + (matched.length / queryWords.length) * 25;
+    }
+  }
+
+  // Bonus: word-boundary match in name (e.g. "coffee" matches "The Coffee House")
+  try {
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`\\b${escaped}`, "i").test(suggestion.main_text)) {
+      score += 5;
+    }
+  } catch {
+    // Regex can fail on unusual input – silently skip
+  }
+
+  // Bonus: query words found in the address / description
+  const qWords = q.split(/\s+/).filter((w) => w.length > 0);
+  score += qWords.filter((w) => desc.includes(w)).length * 2;
+
+  // ── Distance scoring (max ~20) ──
+  if (
+    suggestion.distance_meters != null &&
+    suggestion.distance_meters >= 0
+  ) {
+    const km = suggestion.distance_meters / 1000;
+    // 0 km → +20,  50+ km → 0
+    score += Math.max(0, 20 - km * 0.4);
+  }
+
+  // Penalty: very short name that doesn't really match
+  if (name.length < q.length / 2 && score < 60) {
+    score -= 10;
+  }
+
+  return score;
+}
+
+/** Sort suggestions in-place by descending relevance score. */
+function rankSuggestions(
+  suggestions: LocationSuggestion[],
+  query: string,
+): LocationSuggestion[] {
+  return [...suggestions].sort(
+    (a, b) => scoreRelevance(b, query) - scoreRelevance(a, query),
+  );
 }
 
 // Transform API response to GooglePlacePrediction format
@@ -67,8 +151,29 @@ export function Step1BusinessAnalysis({
     useState(false);
   const [isSearchingBusinessName, setIsSearchingBusinessName] = useState(false);
 
+  // User's geolocation for proximity-biased search
+  const [userLat, setUserLat] = useState<string | null>(null);
+  const [userLng, setUserLng] = useState<string | null>(null);
+
   // Use ref to track the latest search query for race condition handling
   const latestQueryRef = useRef<string>("");
+
+  // Get user's geolocation on mount for proximity-biased results
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLat(String(position.coords.latitude));
+          setUserLng(String(position.coords.longitude));
+        },
+        () => {
+          // Geolocation denied or unavailable – search still works, just without bias
+          console.log("Geolocation not available – results won't be proximity-biased");
+        },
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 },
+      );
+    }
+  }, []);
 
   // Search for business name suggestions using the locations autocomplete API
   useEffect(() => {
@@ -91,11 +196,18 @@ export function Step1BusinessAnalysis({
 
       setIsSearchingBusinessName(true);
       try {
-        // Build API URL with query parameters
+        // Build API URL with query parameters + location for proximity bias
         const params = new URLSearchParams({
           q: businessName.trim(),
           country: "in", // Default to India
         });
+
+        // Pass user location for proximity-biased results (like Google)
+        if (userLat && userLng) {
+          params.set("lat", userLat);
+          params.set("lng", userLng);
+          params.set("radius", "50000"); // 50 km bias radius
+        }
 
         const headers: HeadersInit = {
           "Content-Type": "application/json",
@@ -129,8 +241,11 @@ export function Step1BusinessAnalysis({
         // Extract suggestions from API response
         const apiSuggestions: LocationSuggestion[] = data.data || [];
 
+        // Rank suggestions by keyword relevance + distance (nearest & best match first)
+        const rankedSuggestions = rankSuggestions(apiSuggestions, businessName);
+
         // Map to GooglePlacePrediction format
-        const suggestions = apiSuggestions.map(mapToGooglePlacePrediction);
+        const suggestions = rankedSuggestions.map(mapToGooglePlacePrediction);
 
         // Check if the current business name exactly matches any suggestion
         const exactMatch = suggestions.some(
@@ -158,7 +273,7 @@ export function Step1BusinessAnalysis({
     // Debounce API calls - 300ms is a good balance for typing
     const debounceTimer = setTimeout(searchBusinessNameSuggestions, 300);
     return () => clearTimeout(debounceTimer);
-  }, [businessName, gbpScore]);
+  }, [businessName, gbpScore, userLat, userLng]);
 
   // Handle business name suggestion selection
   const handleSelectBusinessNameSuggestion = (
