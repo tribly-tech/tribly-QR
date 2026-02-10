@@ -329,8 +329,9 @@ export function Step1BusinessAnalysis({
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="business-name"
-                  placeholder="e.g., The Coffee House or Mia by Tanishq"
+                  placeholder="Search by business name..."
                   value={businessName}
+                  autoComplete="off"
                   onChange={(e) => {
                     const value = e.target.value;
                     setBusinessName(value);
