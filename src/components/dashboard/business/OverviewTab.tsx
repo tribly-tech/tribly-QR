@@ -7,10 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Area,
   AreaChart,
   CartesianGrid,
+  Line,
+  LineChart,
   XAxis,
   YAxis,
 } from "recharts";
@@ -23,6 +26,7 @@ import {
   TriangleAlert,
   Unplug,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { calculateGBPScore } from "@/components/sales-dashboard";
 import type { GBPAnalysisData } from "@/components/sales-dashboard/types";
 
@@ -186,7 +190,11 @@ const formatDelta = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(
 const getStatusBadge = (status: PlatformStatus) => {
   switch (status) {
     case "connected":
-      return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Connected</Badge>;
+      return (
+        <Badge className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-700 hover:bg-emerald-100">
+          Connected
+        </Badge>
+      );
     case "syncing":
       return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">Syncing</Badge>;
     case "reconnect":
@@ -243,21 +251,75 @@ function PerformanceTrendChart({ data, className }: { data: number[]; className?
   );
 }
 
-const Sparkline = ({ data }: { data: number[] }) => {
-  const safeData = Array.isArray(data) && data.length > 0 ? data : [0];
-  const max = Math.max(...safeData, 1);
-  return (
-    <div className="flex items-end gap-1 h-12" aria-hidden>
-      {safeData.map((value, index) => (
-        <div
-          key={`${value}-${index}`}
-          className="flex-1 rounded-full bg-gradient-to-t from-primary/40 to-primary"
-          style={{ height: `${Math.max(15, (Number(value) / max) * 100)}%` }}
-        />
-      ))}
-    </div>
+const engagementChartConfig = {
+  value: {
+    label: "Engagement",
+    color: "hsl(var(--chart-1))",
+  },
+} satisfies ChartConfig;
+
+function PlatformEngagementChart({
+  data,
+  platformName,
+  className,
+}: {
+  data: number[];
+  platformName?: string;
+  className?: string;
+}) {
+  const chartData = useMemo(
+    () =>
+      (Array.isArray(data) ? data : []).map((value, i) => ({
+        period: `P${i + 1}`,
+        value: Number(value) || 0,
+      })),
+    [data]
   );
-};
+  if (chartData.length === 0) {
+    return (
+      <div className={cn("flex h-[100px] items-center justify-center rounded-lg border border-dashed border-border/60 bg-muted/20 text-xs text-muted-foreground", className)}>
+        No trend data
+      </div>
+    );
+  }
+  return (
+    <ChartContainer config={engagementChartConfig} className={cn("h-[100px] w-full min-w-[140px]", className)}>
+      <LineChart
+        accessibilityLayer
+        data={chartData}
+        margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
+        <XAxis
+          dataKey="period"
+          tickLine={false}
+          axisLine={false}
+          tickMargin={8}
+          tick={{ fontSize: 10 }}
+        />
+        <YAxis hide />
+        <ChartTooltip
+          content={
+            <ChartTooltipContent
+              indicator="line"
+              labelFormatter={(value) =>
+                platformName ? `${platformName} · ${value}` : String(value)
+              }
+            />
+          }
+        />
+        <Line
+          type="monotone"
+          dataKey="value"
+          stroke="hsl(var(--chart-1))"
+          strokeWidth={2}
+          dot={{ r: 2 }}
+          activeDot={{ r: 4 }}
+        />
+      </LineChart>
+    </ChartContainer>
+  );
+}
 
 /** GBP metrics grouped for intuitive scanning (no new fields; same as before) */
 const GBP_DISCOVERY = ["Searches", "Search views", "Maps views"] as const;
@@ -270,7 +332,13 @@ const BLANK = "—";
 function emptyGbpData(): GbpData {
   return {
     name: "Google Business Profile",
-    icon: <MapPin className="h-5 w-5 text-primary" />,
+    icon: (
+      <img
+        src="/assets/Google-icon.svg"
+        alt="Google Business Profile"
+        className="h-10 w-10 md:h-8 md:w-8"
+      />
+    ),
     status: "not_connected",
     lastSync: BLANK,
     engagementGrowth: 0,
@@ -306,7 +374,13 @@ function mapGBPAnalysisToGbpData(analysis: GBPAnalysisData): GbpData {
 
   return {
     name: "Google Business Profile",
-    icon: <MapPin className="h-5 w-5 text-primary" />,
+    icon: (
+      <img
+        src="/assets/Google-icon.svg"
+        alt="Google Business Profile"
+        className="h-10 w-10 md:h-8 md:w-8"
+      />
+    ),
     status: "connected",
     lastSync: BLANK,
     engagementGrowth: 0,
@@ -681,93 +755,126 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
             <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
               Unified snapshot of your Google Business Profile and social performance.
             </p>
+            {/* Mobile-only updated timestamp, tucked under description for a compact card feel */}
+            <p className="mt-2 text-xs text-muted-foreground md:hidden">
+              Updated {lastSyncedLabel}
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground md:pt-1">Updated {lastSyncedLabel}</p>
+          {/* Desktop / tablet updated timestamp on the right, unchanged */}
+          <p className="hidden text-xs text-muted-foreground md:block md:pt-1">
+            Updated {lastSyncedLabel}
+          </p>
         </div>
 
-        <div className="mt-4 overflow-x-auto pb-1">
-          <div className="inline-flex min-w-full gap-1.5 rounded-xl border border-border/70 bg-muted/20 p-1.5">
-            {TIME_RANGES.map((range) => (
-              <Button
-                key={range}
-                variant="ghost"
-                size="sm"
-                className={`h-9 rounded-lg px-3 text-sm ${
-                  timeRange === range
-                    ? "bg-white text-primary ring-1 ring-primary/40 shadow-sm hover:bg-white hover:text-primary"
-                    : "text-foreground/85 hover:bg-white/70"
-                }`}
-                onClick={() => setTimeRange(range)}
-                aria-pressed={timeRange === range}
-              >
-                {range}
-              </Button>
-            ))}
+        <div className="mt-4">
+          {/* Mobile: dropdown filter instead of horizontal slider tabs */}
+          <div className="md:hidden space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Time range</p>
+            <Select value={timeRange} onValueChange={(value) => setTimeRange(value as TimeRange)}>
+              <SelectTrigger className="h-9 rounded-lg border border-primary/40 bg-white text-sm shadow-sm">
+                <SelectValue placeholder="Select range" />
+              </SelectTrigger>
+              <SelectContent align="start">
+                {TIME_RANGES.map((range) => (
+                  <SelectItem key={range} value={range}>
+                    {range}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[0.7rem] text-muted-foreground">
+              Showing metrics for{" "}
+              <span className="font-medium text-foreground">{TIME_RANGE_CONFIG[timeRange].label.toLowerCase()}</span>
+            </p>
+          </div>
+
+          {/* Desktop: keep pill-style slider tabs exactly as before */}
+          <div className="mt-2 hidden overflow-x-auto pb-1 md:block">
+            <div className="inline-flex min-w-full gap-1.5 rounded-xl border border-border/70 bg-muted/20 p-1.5">
+              {TIME_RANGES.map((range) => (
+                <Button
+                  key={range}
+                  variant="ghost"
+                  size="sm"
+                  className={`h-9 rounded-lg px-3 text-sm ${
+                    timeRange === range
+                      ? "bg-white text-primary ring-1 ring-primary/40 shadow-sm hover:bg-white hover:text-primary"
+                      : "text-foreground/85 hover:bg-white/70"
+                  }`}
+                  onClick={() => setTimeRange(range)}
+                  aria-pressed={timeRange === range}
+                >
+                  {range}
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* KPI cards: horizontal scroll on mobile, grid on desktop */}
+      {/* KPI cards: compact 3-up grid on mobile, 3-column grid on desktop */}
       <div>
-        {/* Mobile: horizontal scroll, card width adapts to content */}
-        <div className="flex gap-3 overflow-x-auto pb-1 md:hidden">
-          <Card className="flex-shrink-0 rounded-2xl border border-purple-100/70 bg-white px-3 py-4 shadow-sm min-w-[260px]">
-            <CardHeader className="px-0 pt-0 pb-2.5">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+        {/* Mobile: redesigned KPI cards with clear header/body/footer zones */}
+        <div className="grid grid-cols-3 gap-2 md:hidden">
+          <Card className="rounded-2xl border border-slate-200/80 bg-white px-2.5 py-3 shadow-sm min-h-[142px]">
+            <div className="grid h-full grid-rows-[auto_1fr_auto] gap-2 text-center">
+              <p className="text-[10px] font-semibold leading-snug text-slate-500">
                 Total connected platforms
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-0 pb-0">
-              <div className="flex items-end gap-2">
-                <span className="text-3xl font-semibold">{summary.connected}</span>
-                <span className="text-sm text-muted-foreground">of {summary.totalPlatforms}</span>
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Sync status updated {lastSyncedLabel}
               </p>
-            </CardContent>
+              <div className="flex items-center justify-center">
+                <div className="flex items-end gap-1">
+                  <span className="text-2xl font-semibold leading-none text-slate-950">{summary.connected}</span>
+                  <span className="text-[11px] text-slate-500">of {summary.totalPlatforms}</span>
+                </div>
+              </div>
+              <div className="border-t border-slate-100 pt-2">
+                <p className="text-[10px] leading-snug text-slate-500">Sync status updated</p>
+                <p className="text-xs font-medium leading-snug text-slate-600">{lastSyncedLabel}</p>
+              </div>
+            </div>
           </Card>
 
-          <Card className="flex-shrink-0 rounded-2xl border border-purple-100/70 bg-white px-3 py-4 shadow-sm min-w-[260px]">
-            <CardHeader className="px-0 pt-0 pb-2.5">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+          <Card className="rounded-2xl border border-slate-200/80 bg-white px-2.5 py-3 shadow-sm min-h-[142px]">
+            <div className="grid h-full grid-rows-[auto_1fr_auto] gap-2 text-center">
+              <p className="text-[10px] font-semibold leading-snug text-slate-500">
                 Overall engagement growth
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-0 pb-0">
-              <div className="flex items-center gap-2">
-                <span className="text-3xl font-semibold">
+              </p>
+              <div className="flex flex-col items-center justify-center gap-1.5">
+                <span className="text-2xl font-semibold leading-none text-slate-950">
                   {summary.averageGrowth.toFixed(1)}%
                 </span>
-                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                <Badge className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100">
                   +{timeRange}
                 </Badge>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="border-t border-slate-100 pt-2 text-[10px] leading-snug text-slate-500">
                 Across connected platforms
               </p>
-            </CardContent>
+            </div>
           </Card>
 
-          <Card className="flex-shrink-0 rounded-2xl border border-purple-100/70 bg-white px-3 py-4 shadow-sm min-w-[260px]">
-            <CardHeader className="px-0 pt-0 pb-2.5">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+          <Card className="rounded-2xl border border-slate-200/80 bg-white px-2.5 py-3 shadow-sm min-h-[142px]">
+            <div className="grid h-full grid-rows-[auto_1fr_auto] gap-2 text-center">
+              <p className="text-[10px] font-semibold leading-snug text-slate-500">
                 Best performing platform
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-0 pb-0">
-              <div className="text-2xl font-semibold">{summary.bestPlatform}</div>
+              </p>
+              <p className="flex items-center justify-center line-clamp-2 text-sm font-semibold leading-snug text-slate-950">
+                {summary.bestPlatform}
+              </p>
               {summary.connected > 0 ? (
-                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                  <ArrowUpRight className="h-4 w-4 text-emerald-500" />
-                  {formatDelta(summary.averageGrowth)} avg engagement lift
+                <div className="border-t border-slate-100 pt-2 text-[10px] leading-snug text-slate-500">
+                  <div className="flex items-center justify-center gap-1">
+                    <ArrowUpRight className="h-3 w-3 shrink-0 text-emerald-500" />
+                    <span>{formatDelta(summary.averageGrowth)} avg</span>
+                  </div>
+                  <p>engagement lift</p>
                 </div>
               ) : (
-                <p className="mt-2 text-xs text-muted-foreground">
+                <p className="border-t border-slate-100 pt-2 text-[10px] leading-snug text-slate-500">
                   Connect a platform to see performance.
                 </p>
               )}
-            </CardContent>
+            </div>
           </Card>
         </div>
 
@@ -860,7 +967,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
           <div className="bg-gradient-to-r from-primary/5 via-transparent to-primary/5 px-6 pt-5 pb-1">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/10">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 md:bg-primary/10 ring-1 ring-slate-100 md:ring-primary/10">
                   {gbp.icon}
                 </div>
                 <div>
@@ -878,9 +985,9 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                 <div className="flex flex-wrap items-center gap-2">
                 {getStatusBadge(gbp.status)}
                 {gbp.status === "connected" && (
-                <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-700">
-                  {Number(filteredGbp?.engagementGrowth ?? gbp?.engagementGrowth ?? 0).toFixed(1)}% growth
-                </span>
+                  <Badge className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-700 hover:bg-emerald-100">
+                    {Number(filteredGbp?.engagementGrowth ?? gbp?.engagementGrowth ?? 0).toFixed(1)}% growth
+                  </Badge>
                 )}
                 <Button variant="ghost" size="sm" className="text-primary hover:text-primary/90" onClick={() => onViewGbpReport?.()}>
                   View full report →
@@ -945,21 +1052,23 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Insights
                 </p>
-                <ul className="space-y-3 max-w-prose">
+                <ul className="space-y-3 max-w-prose rounded-xl border border-slate-100 bg-slate-50/40 p-3 sm:p-4">
                   {(gbp.highlights ?? []).length === 0 ? (
                     <li className="text-sm text-muted-foreground leading-relaxed">
                       No insights yet. Open Google Business Health for full analysis.
                     </li>
                   ) : (
-                    (gbp.highlights ?? []).map((h) => (
-                          <li
-                            key={h}
-                            className="flex gap-3 text-sm text-muted-foreground leading-relaxed"
-                          >
-                            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                            <span>{h}</span>
-                          </li>
-                        ))
+                    (gbp.highlights ?? []).map((h, idx) => (
+                      <li
+                        key={h}
+                        className={`flex gap-3 text-sm text-muted-foreground leading-relaxed ${
+                          idx > 0 ? "border-t border-slate-200/70 pt-3 mt-2" : ""
+                        }`}
+                      >
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                        <span>{h}</span>
+                      </li>
+                    ))
                   )}
                 </ul>
               </div>
@@ -1062,7 +1171,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                       </Badge>
                       </div>
                     </div>
-                    <Sparkline data={platform.miniChart} />
+                    <PlatformEngagementChart data={platform.miniChart} platformName={platform.name} />
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">

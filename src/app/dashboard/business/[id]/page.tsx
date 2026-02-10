@@ -929,11 +929,11 @@ export default function BusinessDetailPage() {
           </div>
         </div>
 
-        {/* Mobile Header - app-style top bar */}
+        {/* Mobile Header - clean, minimal top bar */}
         <div className="md:hidden">
           <div className="sticky top-0 z-30 -mx-3 mb-3 px-3 pb-2 pt-2.5">
-            <div className="rounded-2xl border border-purple-100/80 bg-white p-3.5 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
+            <div className="rounded-2xl p-3.5">
+              <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-2.5">
                 {!isBusinessOwner && currentUser?.userType !== "business_qr_user" && (
                   <Button
@@ -947,18 +947,15 @@ export default function BusinessDetailPage() {
                   </Button>
                 )}
                 <div className="min-w-0">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Business
-                  </p>
-                  <h1 className="truncate text-2xl font-bold leading-tight text-foreground">{business.name}</h1>
+                  <h1 className="truncate text-xl font-semibold leading-tight text-foreground">{business.name}</h1>
                 </div>
               </div>
                 <div className="flex items-center gap-1.5">
                   <Badge
-                    className={`rounded-full px-3 py-1 text-sm font-medium ${
+                    className={`rounded-full px-3 py-1 text-xs font-medium border ${
                       business.status === "active"
-                        ? "bg-violet-100 text-violet-700 hover:bg-violet-100"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-100"
+                        ? "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-50"
+                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-50"
                     }`}
                   >
                     {business.status === "active" ? (
@@ -973,16 +970,25 @@ export default function BusinessDetailPage() {
                       variant="ghost"
                       size="icon"
                       onClick={handleLogout}
-                      className="h-9 w-9 rounded-full text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/60"
+                      className="h-9 w-9 rounded-full border border-slate-200 bg-white/80 text-muted-foreground hover:bg-white focus-visible:ring-2 focus-visible:ring-primary/60"
                       aria-label="Logout"
                     >
-                      <LogOut className="h-4 w-4" />
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4"
+                      >
+                        <path
+                          d="M13.5628 11.4375H12.4644C12.3894 11.4375 12.3191 11.4703 12.2722 11.5281C12.1628 11.661 12.0457 11.7891 11.9222 11.911C11.4174 12.4163 10.8194 12.8191 10.1613 13.0969C9.4795 13.3849 8.7467 13.5326 8.0066 13.5313C7.25816 13.5313 6.53316 13.3844 5.85191 13.0969C5.19382 12.8191 4.59582 12.4163 4.09097 11.911C3.58522 11.4073 3.18194 10.8103 2.90347 10.1531C2.61441 9.4719 2.4691 8.74846 2.4691 8.00002C2.4691 7.25159 2.61597 6.52815 2.90347 5.8469C3.1816 5.18909 3.5816 4.5969 4.09097 4.08909C4.60035 3.58127 5.19254 3.18127 5.85191 2.90315C6.53316 2.61565 7.25816 2.46877 8.0066 2.46877C8.75504 2.46877 9.48003 2.61409 10.1613 2.90315C10.8207 3.18127 11.4128 3.58127 11.9222 4.08909C12.0457 4.21252 12.1613 4.34065 12.2722 4.4719C12.3191 4.52971 12.391 4.56252 12.4644 4.56252H13.5628C13.6613 4.56252 13.7222 4.45315 13.6675 4.37034C12.4691 2.50784 10.3722 1.27502 7.98941 1.28127C4.24566 1.29065 1.2441 4.32971 1.2816 8.06877C1.3191 11.7485 4.31597 14.7188 8.0066 14.7188C10.3832 14.7188 12.4707 13.4875 13.6675 11.6297C13.7207 11.5469 13.6613 11.4375 13.5628 11.4375ZM14.9519 7.90159L12.7347 6.15159C12.6519 6.08596 12.5316 6.14534 12.5316 6.25002V7.43752H7.62535C7.5566 7.43752 7.50035 7.49377 7.50035 7.56252V8.43752C7.50035 8.50627 7.5566 8.56252 7.62535 8.56252H12.5316V9.75002C12.5316 9.85471 12.6535 9.91409 12.7347 9.84846L14.9519 8.09846C14.9669 8.08677 14.9789 8.07183 14.9872 8.05477C14.9956 8.03772 14.9999 8.019 14.9999 8.00002C14.9999 7.98105 14.9956 7.96233 14.9872 7.94527C14.9789 7.92822 14.9669 7.91328 14.9519 7.90159Z"
+                          fill="currentColor"
+                        />
+                      </svg>
                     </Button>
                   )}
                 </div>
-              </div>
-              <div className="mt-2.5 flex items-center gap-2">
-                <p className="truncate text-sm text-muted-foreground">{business.email}</p>
               </div>
             </div>
           </div>
@@ -2232,7 +2238,7 @@ export default function BusinessDetailPage() {
                         <TabsTrigger
                           key={item.value}
                           value={item.value}
-                          className="h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-2 text-[11px] font-medium text-muted-foreground data-[state=active]:bg-[#F4EBFF] data-[state=active]:text-[#7C3AED] data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-[#E0D4FF] focus-visible:ring-2 focus-visible:ring-primary/60"
+                          className="h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-2 text-[11px] font-medium text-muted-foreground data-[state=active]:bg-[#F4EBFF] data-[state=active]:text-[#7C3AED] data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-[#E0D4FF] focus-visible:ring-2 focus-visible:ring-primary/60"
                         >
                           <Icon className="h-4 w-4" />
                           <span className="truncate">{item.shortLabel}</span>

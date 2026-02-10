@@ -102,6 +102,14 @@
     @apply bg-background text-foreground;
     font-family: var(--font-clash-grotesk);
   }
+  /* Hide all scroll indicators across the product */
+  * {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Infinite vertical scroll for "Perfect for all businesses" columns */

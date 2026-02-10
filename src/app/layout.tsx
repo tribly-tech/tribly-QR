@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description:
     "More stars. More visibility. More growth. Growth QR turns Google reviews into real revenue for your business",
   manifest: "/manifest.json",
-  themeColor: "#0F172A",
+  themeColor: "#F7F1FF",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
