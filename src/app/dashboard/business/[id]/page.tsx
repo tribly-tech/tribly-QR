@@ -1622,6 +1622,48 @@ export default function BusinessDetailPage() {
             </TabsContent>
           </div>
         </Tabs>
+
+        {/* Footer */}
+        <footer className="mt-[120px] pt-8 border-t border-border/60">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-foreground">tribly.ai</span>
+              <span className="text-border">·</span>
+              <span>Business dashboard</span>
+            </div>
+            <nav className="flex flex-wrap items-center gap-x-6 gap-y-1">
+              <a
+                href="/terms"
+                className="hover:text-foreground transition-colors"
+              >
+                Terms & Conditions
+              </a>
+              <a
+                href="/privacy"
+                className="hover:text-foreground transition-colors"
+              >
+                Privacy Policy
+              </a>
+              <a
+                href="mailto:growth@tribly.ai"
+                className="hover:text-foreground transition-colors"
+              >
+                Contact
+              </a>
+              <a
+                href="https://tribly.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-foreground transition-colors"
+              >
+                Help
+              </a>
+            </nav>
+          </div>
+          <p className="mt-4 text-xs text-muted-foreground/80">
+            © {new Date().getFullYear()} tribly.ai · Turn Google reviews into growth
+          </p>
+        </footer>
       </div>
 
       {/* Toast Notification */}

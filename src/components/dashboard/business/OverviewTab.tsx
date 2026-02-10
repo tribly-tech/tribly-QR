@@ -879,7 +879,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                 <Button
                   size="sm"
                   className="mt-4"
-                  variant="outline"
+                        variant="outline"
                   onClick={() => onViewGbpReport?.()}
                 >
                   View full report →

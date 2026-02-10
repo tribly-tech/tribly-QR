@@ -2089,13 +2089,21 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-[#f7f1ff]">
+      <footer className="mt-[120px] bg-[#f7f1ff]">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-12 md:py-16 text-center">
           <h2 className="text-[100px] md:text-[235.2px] font-extrabold leading-[1.4] text-[#e1d8ff] mb-6 md:mb-8 font-clash-grotesk">
             growth QR
           </h2>
           <div className="max-w-7xl mx-auto px-4 md:px-6">
-            <div className="border-t border-[#e1d8ff] pt-6 md:pt-8">
+            <div className="border-t border-[#e1d8ff] pt-6 md:pt-8 space-y-3">
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm">
+                <a href="/terms" className="text-[#9747ff] hover:underline font-medium">
+                  Terms & Conditions
+                </a>
+                <a href="/privacy" className="text-[#9747ff] hover:underline font-medium">
+                  Privacy Policy
+                </a>
+              </div>
               <p className="text-[#9747ff] text-sm leading-5 font-medium">
                 © 2025, tribly tech pvt ltd.
               </p>
