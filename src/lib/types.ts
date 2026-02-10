@@ -10,6 +10,13 @@ export type BusinessCategory =
   | "real-estate"
   | "education"
   | "hospitality"
+  | "manufacturing"
+  | "services"
+  | "technology"
+  | "finance"
+  | "logistics"
+  | "media-entertainment"
+  | "non-profit"
   | "other";
 
 export type FeedbackTone = "professional" | "friendly" | "casual" | "formal";
@@ -28,6 +35,7 @@ export interface Business {
   address?: string;
   city?: string;
   area?: string;
+  pincode?: string;
   overview?: string; // Business overview/description
   createdAt: string;
   updatedAt: string;

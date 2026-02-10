@@ -5,13 +5,20 @@ export const metadata: Metadata = {
   title: "Growth QR - Turn Google Reviews into Revenue",
   description:
     "More stars. More visibility. More growth. Growth QR turns Google reviews into real revenue for your business",
+  manifest: "/manifest.json",
+  themeColor: "#0F172A",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Growth QR",
+  },
   icons: {
     icon: [
       { url: "/favicon.png", type: "image/png" },
       { url: "/icon.png", type: "image/png", sizes: "32x32" },
     ],
     apple: "/apple-icon.png",
-  }, 
+  },
 };
 
 export const viewport: Viewport = {
@@ -21,6 +28,7 @@ export const viewport: Viewport = {
 };
 
 import { LegacyCleanup } from "@/components/LegacyCleanup";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 export default function RootLayout({
   children,
@@ -47,6 +55,7 @@ export default function RootLayout({
       </head>
       <body>
         <LegacyCleanup />
+        <ServiceWorkerRegister />
         {children}
       </body>
     </html>

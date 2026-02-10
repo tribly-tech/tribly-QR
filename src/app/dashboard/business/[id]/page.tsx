@@ -18,6 +18,14 @@ import { generateShortUrlCode, generateReviewUrl, generateQRCodeDataUrl, downloa
 import { getBusinessBySlug } from "@/lib/business-slug";
 import { getStoredUser, logout, setStoredUser, getAuthToken } from "@/lib/auth";
 import { BUSINESS_MAIN_TABS, BUSINESS_SETTINGS_SUB_TABS } from "@/lib/routes";
+import { categorySuggestions, serviceSuggestions } from "@/lib/category-suggestions";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Toast } from "@/components/ui/toast";
 import { OverviewTab } from "@/components/dashboard/business/OverviewTab";
 import { KeywordsTab } from "@/components/dashboard/business/KeywordsTab";
@@ -27,6 +35,8 @@ import {
   ArrowLeft,
   CreditCard,
   CheckCircle2,
+  Plus,
+  X,
   XCircle,
   Clock,
   Download,
@@ -54,7 +64,21 @@ import {
 } from "lucide-react";
 
 const DEFAULT_TAB: (typeof BUSINESS_MAIN_TABS)[number] = "overview";
-const DEFAULT_SETTINGS_SUB: (typeof BUSINESS_SETTINGS_SUB_TABS)[number] = "links";
+const DEFAULT_SETTINGS_SUB: (typeof BUSINESS_SETTINGS_SUB_TABS)[number] = "business-info";
+
+const MOBILE_MAIN_TAB_ITEMS: Array<{
+  value: (typeof BUSINESS_MAIN_TABS)[number];
+  label: string;
+  shortLabel: string;
+  icon: typeof LayoutDashboard;
+}> = [
+  { value: "overview", label: "Overview", shortLabel: "Overview", icon: LayoutDashboard },
+  { value: "gmb-health", label: "Business Health", shortLabel: "Health", icon: Target },
+  { value: "recommended-actions", label: "Actions", shortLabel: "Actions", icon: Lightbulb },
+  { value: "keywords", label: "Keywords", shortLabel: "Keywords", icon: Hash },
+  { value: "reviews", label: "Reviews", shortLabel: "Reviews", icon: Star },
+  { value: "settings", label: "Settings", shortLabel: "Settings", icon: Settings },
+];
 
 export default function BusinessDetailPage() {
   const router = useRouter();
@@ -76,7 +100,6 @@ export default function BusinessDetailPage() {
   const [isBusinessOwner, setIsBusinessOwner] = useState(false);
   const [currentUser, setCurrentUser] = useState<ReturnType<typeof getStoredUser>>(null);
 
-  // Category suggestions state
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "failed" | "expired">("pending");
   const [paymentQRCode, setPaymentQRCode] = useState<string | null>(null);
@@ -86,6 +109,13 @@ export default function BusinessDetailPage() {
   const [isQRId, setIsQRId] = useState(false);
   const [apiReviews, setApiReviews] = useState<Review[]>([]);
   const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+  const [businessServiceInput, setBusinessServiceInput] = useState("");
+  const [showBusinessServiceSuggestions, setShowBusinessServiceSuggestions] = useState(false);
+
+  const suggestedCategories = useMemo(
+    () => Object.keys(categorySuggestions) as BusinessCategory[],
+    [],
+  );
 
   // Sync tab state from URL (deep links, refresh, back/forward)
   useEffect(() => {
@@ -119,6 +149,34 @@ export default function BusinessDetailPage() {
     next.set("sub", value);
     router.replace(`${pathname}?${next.toString()}`, { scroll: false });
   };
+
+  const businessServiceSuggestions = useMemo(() => {
+    if (!business?.category) return [];
+    return serviceSuggestions[business.category as BusinessCategory] || [];
+  }, [business?.category]);
+
+  // Close business service suggestions on outside tap/click
+  useEffect(() => {
+    const handleOutsideInteraction = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as HTMLElement;
+      if (
+        !target.closest(".service-input-container") &&
+        !target.closest(".service-suggestions-dropdown")
+      ) {
+        setShowBusinessServiceSuggestions(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideInteraction);
+    document.addEventListener("touchstart", handleOutsideInteraction, {
+      passive: true,
+    });
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideInteraction);
+      document.removeEventListener("touchstart", handleOutsideInteraction);
+    };
+  }, []);
 
   useEffect(() => {
     const loadBusinessData = async () => {
@@ -157,6 +215,7 @@ export default function BusinessDetailPage() {
             address: qrData.business_address?.address_line1 || "",
             city: qrData.business_address?.city || "",
             area: qrData.business_address?.area || "",
+            pincode: qrData.business_address?.pincode || qrData.business_address?.postal_code || "",
             overview: qrData.business_description || "",
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -661,6 +720,11 @@ export default function BusinessDetailPage() {
           payload.tags = business.keywords || [];
         }
 
+        // Include services when saving business information
+        if (section === "Business information" && business.services && business.services.length > 0) {
+          payload.services = business.services;
+        }
+
         // Only include address if address_line1 is provided (required field)
         if (business.address) {
           payload.address = {
@@ -668,6 +732,7 @@ export default function BusinessDetailPage() {
             address_line2: null,
             city: business.city || "",
             area: business.area || "",
+            pincode: business.pincode || "",
           };
         }
 
@@ -826,11 +891,13 @@ export default function BusinessDetailPage() {
     router.push("/login");
   };
 
+  const activeMobileTabItem = MOBILE_MAIN_TAB_ITEMS.find((item) => item.value === activeTab) ?? MOBILE_MAIN_TAB_ITEMS[0];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF]">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Header */}
-        <div className="mb-6">
+      <div className="container mx-auto max-w-7xl px-3 pb-[calc(88px+env(safe-area-inset-bottom))] pt-3 md:px-4 md:py-8">
+        {/* Desktop Header */}
+        <div className="mb-6 hidden md:block">
           {!isBusinessOwner && currentUser?.userType !== "business_qr_user" && (
           <Button
             variant="ghost"
@@ -862,8 +929,67 @@ export default function BusinessDetailPage() {
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={handleMainTabChange} className="flex flex-col lg:flex-row gap-6">
-          <TabsList className="flex flex-col lg:w-64 w-full bg-white/80 backdrop-blur-sm border border-purple-100 p-2 rounded-lg shadow-sm h-fit space-y-1">
+        {/* Mobile Header - app-style top bar */}
+        <div className="md:hidden">
+          <div className="sticky top-0 z-30 -mx-3 mb-3 px-3 pb-2 pt-2.5">
+            <div className="rounded-2xl border border-purple-100/80 bg-white p-3.5 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-2.5">
+                {!isBusinessOwner && currentUser?.userType !== "business_qr_user" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => router.push("/dashboard")}
+                    className="h-9 w-9 rounded-full text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/60"
+                    aria-label="Back to dashboard"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                )}
+                <div className="min-w-0">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Business
+                  </p>
+                  <h1 className="truncate text-2xl font-bold leading-tight text-foreground">{business.name}</h1>
+                </div>
+              </div>
+                <div className="flex items-center gap-1.5">
+                  <Badge
+                    className={`rounded-full px-3 py-1 text-sm font-medium ${
+                      business.status === "active"
+                        ? "bg-violet-100 text-violet-700 hover:bg-violet-100"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    {business.status === "active" ? (
+                      <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                    ) : (
+                      <XCircle className="mr-1 h-3.5 w-3.5" />
+                    )}
+                    {business.status === "active" ? "Active" : "Inactive"}
+                  </Badge>
+                  {currentUser && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleLogout}
+                      className="h-9 w-9 rounded-full text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/60"
+                      aria-label="Logout"
+                    >
+                      <LogOut className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="mt-2.5 flex items-center gap-2">
+                <p className="truncate text-sm text-muted-foreground">{business.email}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={handleMainTabChange} className="flex flex-col gap-4 lg:flex-row lg:gap-6">
+          <TabsList className="hidden h-fit w-full flex-col space-y-1 rounded-lg border border-purple-100 bg-white/80 p-2 shadow-sm backdrop-blur-sm md:flex md:w-64">
             <TabsTrigger
               value="overview"
               className="w-full justify-start rounded-md data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm transition-all py-3 h-auto"
@@ -938,7 +1064,7 @@ export default function BusinessDetailPage() {
             </TabsTrigger>
           </TabsList>
 
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1">
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6 mt-0">
             <OverviewTab
@@ -952,32 +1078,501 @@ export default function BusinessDetailPage() {
           {/* Settings Tab */}
           <TabsContent value="settings" className="space-y-6 mt-0">
             <Tabs value={settingsSubTab} onValueChange={handleSettingsSubChange} className="w-full">
-              {/* Horizontal tab bar: pill style with icons for quick scanning */}
-              <div className="rounded-xl border border-border/80 bg-white p-1.5 shadow-sm">
-                <TabsList className="flex flex-row h-auto gap-1.5 p-0 bg-transparent border-0 shadow-none w-full">
-                  <TabsTrigger
-                    value="links"
-                    className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
-                  >
-                    <Link2 className="h-4 w-4 shrink-0" />
-                    <span className="truncate">Links & QR</span>
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="auto-reply"
-                    className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
-                  >
-                    <Bot className="h-4 w-4 shrink-0" />
-                    <span className="truncate">Auto Reply</span>
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="payment"
-                    className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
-                  >
-                    <CreditCard className="h-4 w-4 shrink-0" />
-                    <span className="truncate">Payment</span>
-                  </TabsTrigger>
-                </TabsList>
+              {/* Settings sub-tabs */}
+              {/* Desktop: 4-column grid */}
+              <div className="hidden md:block">
+                <div className="rounded-xl border border-border/80 bg-white p-1.5 shadow-sm">
+                  <TabsList className="grid h-auto w-full grid-cols-4 gap-1.5 border-0 bg-transparent p-0 shadow-none">
+                    <TabsTrigger
+                      value="business-info"
+                      className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
+                    >
+                      <LayoutDashboard className="h-4 w-4 shrink-0" />
+                      <span>Business Info</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="links"
+                      className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
+                    >
+                      <Link2 className="h-4 w-4 shrink-0" />
+                      <span>Links & QR</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="auto-reply"
+                      className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
+                    >
+                      <Bot className="h-4 w-4 shrink-0" />
+                      <span>Auto Reply</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="payment"
+                      className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
+                    >
+                      <CreditCard className="h-4 w-4 shrink-0" />
+                      <span>Payment</span>
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
               </div>
+
+              {/* Mobile: horizontally scrollable "carousel" tabs with full labels */}
+              <div className="md:hidden">
+                <div className="overflow-x-auto px-2">
+                  <TabsList
+                    aria-label="Settings sections"
+                    className="h-auto w-max min-w-full items-stretch justify-start gap-2 rounded-xl border border-border/80 bg-white p-2 shadow-sm"
+                  >
+                    <TabsTrigger
+                      value="business-info"
+                      className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
+                    >
+                      <LayoutDashboard className="h-5 w-5 shrink-0" />
+                      <span className="whitespace-nowrap">Business Info</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="links"
+                      className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
+                    >
+                      <Link2 className="h-5 w-5 shrink-0" />
+                      <span className="whitespace-nowrap">Links &amp; QR</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="auto-reply"
+                      className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
+                    >
+                      <Bot className="h-5 w-5 shrink-0" />
+                      <span className="whitespace-nowrap">Auto Reply</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="payment"
+                      className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
+                    >
+                      <CreditCard className="h-5 w-5 shrink-0" />
+                      <span className="whitespace-nowrap">Payment</span>
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
+              </div>
+              <TabsContent value="business-info" className="mt-5 space-y-6">
+                {/* Basic Information (matches onboarding BasicInformationCard) */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Basic Information</CardTitle>
+                    <CardDescription>
+                      Enter the essential details about the business
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="business-name">
+                          Business Name <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                          id="business-name"
+                          placeholder="e.g., The Coffee House"
+                          value={business.name}
+                          onChange={(e) => handleUpdateBusiness({ name: e.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Enter the official business name as it appears on legal documents
+                        </p>
+                      </div>
+
+                      {/* Dotted separator */}
+                      <div className="relative my-2">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-dotted border-muted-foreground/30" />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-2">
+                        <Label htmlFor="business-category">
+                          Business Category <span className="text-destructive">*</span>
+                        </Label>
+                        <Select
+                          value={business.category}
+                          onValueChange={(value) => {
+                            handleUpdateBusiness({
+                              category: value as BusinessCategory,
+                            });
+                            setBusinessServiceInput("");
+                          }}
+                        >
+                          <SelectTrigger id="business-category">
+                            <SelectValue placeholder="Select business category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="restaurant">Restaurant</SelectItem>
+                            <SelectItem value="retail">Retail</SelectItem>
+                            <SelectItem value="healthcare">Healthcare</SelectItem>
+                            <SelectItem value="beauty">Beauty</SelectItem>
+                            <SelectItem value="fitness">Fitness</SelectItem>
+                            <SelectItem value="automotive">Automotive</SelectItem>
+                            <SelectItem value="real-estate">Real Estate</SelectItem>
+                            <SelectItem value="education">Education</SelectItem>
+                            <SelectItem value="hospitality">Hospitality</SelectItem>
+                            <SelectItem value="manufacturing">Manufacturing/Industrial</SelectItem>
+                            <SelectItem value="services">Professional & Local Services</SelectItem>
+                            <SelectItem value="technology">Technology / IT / SaaS</SelectItem>
+                            <SelectItem value="finance">Financial Services</SelectItem>
+                            <SelectItem value="logistics">Logistics & Transport</SelectItem>
+                            <SelectItem value="media-entertainment">Media & Entertainment</SelectItem>
+                            <SelectItem value="non-profit">Non-profit / NGO</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+
+                        {/* Suggested categories */}
+                        {suggestedCategories.length > 0 && !business.category && (
+                          <div className="mt-2">
+                            <p className="mb-2 text-xs text-muted-foreground">
+                              Suggested categories:
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {suggestedCategories.map((cat) => (
+                                <Badge
+                                  key={cat}
+                                  variant="outline"
+                                  className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                                  onClick={() =>
+                                    handleUpdateBusiness({
+                                      category: cat,
+                                    })
+                                  }
+                                >
+                                  {cat
+                                    .split("-")
+                                    .map(
+                                      (word) =>
+                                        word.charAt(0).toUpperCase() + word.slice(1),
+                                    )
+                                    .join(" ")}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Category suggestions */}
+                        {business.category &&
+                          categorySuggestions[business.category as BusinessCategory] && (
+                            <div className="mt-2">
+                              <p className="mb-2 text-xs text-muted-foreground">
+                                Common types for {business.category}:
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {categorySuggestions[business.category as BusinessCategory]
+                                  .slice(0, 5)
+                                  .map((suggestion) => (
+                                    <Badge
+                                      key={suggestion}
+                                      variant="secondary"
+                                      className="text-xs"
+                                    >
+                                      {suggestion}
+                                    </Badge>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
+
+                        <p className="text-xs text-muted-foreground">
+                          Select the primary category that best describes the business
+                        </p>
+                      </div>
+
+                      {/* Dotted separator */}
+                      <div className="relative my-2">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-dotted border-muted-foreground/30" />
+                        </div>
+                      </div>
+
+                      {/* Services section (matches onboarding) */}
+                      <div className="grid gap-2">
+                        <Label htmlFor="business-services">Business Services</Label>
+                        <div className="relative service-input-container">
+                          <Input
+                            id="business-services"
+                            placeholder={
+                              business.category
+                                ? `Add a service (e.g., ${
+                                    businessServiceSuggestions[0] || "Service name"
+                                  })`
+                                : "Select a category first to see suggestions"
+                            }
+                            value={businessServiceInput}
+                            onChange={(e) => {
+                              setBusinessServiceInput(e.target.value);
+                              setShowBusinessServiceSuggestions(
+                                e.target.value.length > 0 &&
+                                  businessServiceSuggestions.length > 0,
+                              );
+                            }}
+                            onFocus={() => {
+                              if (businessServiceSuggestions.length > 0) {
+                                setShowBusinessServiceSuggestions(true);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && businessServiceInput.trim()) {
+                                e.preventDefault();
+                                const service = businessServiceInput.trim();
+                                const current = business.services || [];
+                                if (!current.includes(service)) {
+                                  handleUpdateBusiness({
+                                    services: [...current, service],
+                                  });
+                                }
+                                setBusinessServiceInput("");
+                                setShowBusinessServiceSuggestions(false);
+                              }
+                            }}
+                            disabled={!business.category}
+                          />
+
+                          {/* Service suggestions dropdown */}
+                          {showBusinessServiceSuggestions &&
+                            businessServiceSuggestions.length > 0 && (
+                              <div className="service-suggestions-dropdown absolute top-full z-50 mt-1 max-h-48 w-full overflow-auto rounded-md border bg-white">
+                                {businessServiceSuggestions
+                                  .filter((suggestion) =>
+                                    suggestion
+                                      .toLowerCase()
+                                      .includes(businessServiceInput.toLowerCase()),
+                                  )
+                                  .map((suggestion) => (
+                                    <div
+                                      key={suggestion}
+                                      className="cursor-pointer border-b p-2 last:border-b-0 hover:bg-muted"
+                                      onClick={() => {
+                                        const current = business.services || [];
+                                        if (!current.includes(suggestion)) {
+                                          handleUpdateBusiness({
+                                            services: [...current, suggestion],
+                                          });
+                                        }
+                                        setBusinessServiceInput("");
+                                        setShowBusinessServiceSuggestions(false);
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <Plus className="h-4 w-4 text-muted-foreground" />
+                                        <span className="text-sm">{suggestion}</span>
+                                      </div>
+                                    </div>
+                                  ))}
+
+                                {businessServiceInput.trim() &&
+                                  !businessServiceSuggestions.some(
+                                    (s) =>
+                                      s.toLowerCase() ===
+                                      businessServiceInput.toLowerCase(),
+                                  ) && (
+                                    <div
+                                      className="cursor-pointer border-t p-2 hover:bg-muted"
+                                      onClick={() => {
+                                        const service = businessServiceInput.trim();
+                                        const current = business.services || [];
+                                        if (!current.includes(service)) {
+                                          handleUpdateBusiness({
+                                            services: [...current, service],
+                                          });
+                                        }
+                                        setBusinessServiceInput("");
+                                        setShowBusinessServiceSuggestions(false);
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <Plus className="h-4 w-4 text-muted-foreground" />
+                                        <span className="text-sm">
+                                          Add &quot;{businessServiceInput}&quot;
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
+                              </div>
+                            )}
+                        </div>
+
+                        {/* Added services */}
+                        {business.services && business.services.length > 0 && (
+                          <div className="mt-3">
+                            <p className="mb-2 text-xs text-muted-foreground">
+                              Added business services:
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {business.services.map((service) => (
+                                <Badge
+                                  key={service}
+                                  variant="default"
+                                  className="cursor-pointer"
+                                  onClick={() => {
+                                    const remaining = (business.services || []).filter(
+                                      (s) => s !== service,
+                                    );
+                                    handleUpdateBusiness({ services: remaining });
+                                  }}
+                                >
+                                  {service}
+                                  <X className="ml-1 h-3 w-3" />
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <p className="text-xs text-muted-foreground">
+                          {business.category
+                            ? "Click on suggested business services or type to add custom services"
+                            : "Select a business category first to see business service suggestions"}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Business Overview (matches onboarding BusinessOverviewCard) */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Business Overview</CardTitle>
+                    <CardDescription>
+                      Provide a brief description of the business
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="overview">Business Overview</Label>
+                        <Textarea
+                          id="overview"
+                          placeholder="Describe the business, its services, specialties, and what makes it unique..."
+                          value={business.overview || ""}
+                          onChange={(e) =>
+                            handleUpdateBusiness({ overview: e.target.value })
+                          }
+                          className="min-h-[120px] resize-none"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          A brief description of the business that will be displayed on the
+                          business profile
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Contact Information (matches onboarding ContactInformationCard) */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Contact Information</CardTitle>
+                    <CardDescription>
+                      Provide contact details for the business
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="email">
+                          Business Email <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="contact@business.com"
+                          value={business.email}
+                          onChange={(e) =>
+                            handleUpdateBusiness({ email: e.target.value })
+                          }
+                          required
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Primary email address for business communications
+                        </p>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="phone">Phone Number</Label>
+                        <Input
+                          id="phone"
+                          type="tel"
+                          placeholder="+91 98765 43210"
+                          value={business.phone || ""}
+                          onChange={(e) =>
+                            handleUpdateBusiness({ phone: e.target.value })
+                          }
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Include country code (e.g., +91 for India)
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Location Information (matches onboarding LocationInformationCard) */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Location Information</CardTitle>
+                    <CardDescription>
+                      Enter the physical location of the business
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="address">Street Address</Label>
+                        <Input
+                          id="address"
+                          placeholder="123 Main Street, Building Name"
+                          value={business.address || ""}
+                          onChange={(e) =>
+                            handleUpdateBusiness({ address: e.target.value })
+                          }
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Complete street address including building number and name
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="city">City</Label>
+                          <Input
+                            id="city"
+                            placeholder="Mumbai"
+                            value={business.city || ""}
+                            onChange={(e) =>
+                              handleUpdateBusiness({ city: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="area">Area / Locality</Label>
+                          <Input
+                            id="area"
+                            placeholder="Bandra"
+                            value={business.area || ""}
+                            onChange={(e) =>
+                              handleUpdateBusiness({ area: e.target.value })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="pincode">Pincode</Label>
+                        <Input
+                          id="pincode"
+                          placeholder="400001"
+                          value={business.pincode || ""}
+                          onChange={(e) =>
+                            handleUpdateBusiness({ pincode: e.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
               <TabsContent value="links" className="mt-5 space-y-6">
             {qrCodeDataUrl && (
               <Card>
@@ -1621,10 +2216,38 @@ export default function BusinessDetailPage() {
               </Card>
             </TabsContent>
           </div>
+
+          {/* Mobile bottom navigation - app style */}
+          <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 md:hidden">
+            <div className="mx-auto max-w-7xl px-3 pb-[max(10px,env(safe-area-inset-bottom))] pt-1.5">
+              <Card className="pointer-events-auto rounded-2xl border border-white/25 bg-gradient-to-r from-white/35 via-white/20 to-white/35 shadow-[0_18px_45px_rgba(80,48,160,0.35)] backdrop-blur-xl">
+                <CardContent className="p-1.5">
+                  <TabsList
+                    aria-label="Primary navigation"
+                    className="flex h-auto w-full items-stretch justify-between gap-1 bg-transparent p-0"
+                  >
+                    {MOBILE_MAIN_TAB_ITEMS.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <TabsTrigger
+                          key={item.value}
+                          value={item.value}
+                          className="h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-2 text-[11px] font-medium text-muted-foreground data-[state=active]:bg-[#F4EBFF] data-[state=active]:text-[#7C3AED] data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-[#E0D4FF] focus-visible:ring-2 focus-visible:ring-primary/60"
+                        >
+                          <Icon className="h-4 w-4" />
+                          <span className="truncate">{item.shortLabel}</span>
+                        </TabsTrigger>
+                      );
+                    })}
+                  </TabsList>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </Tabs>
 
         {/* Footer */}
-        <footer className="mt-[120px] pt-8 border-t border-border/60">
+        <footer className="mt-12 hidden border-t border-border/60 pt-8 md:block md:mt-[120px]">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-foreground">tribly.ai</span>

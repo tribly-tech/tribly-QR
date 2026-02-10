@@ -98,8 +98,23 @@ export default function DashboardPage() {
 
           // Map category from API response, validate it's a valid BusinessCategory
           const validCategories: BusinessCategory[] = [
-            "restaurant", "retail", "healthcare", "beauty", "fitness",
-            "automotive", "real-estate", "education", "hospitality", "other"
+            "restaurant",
+            "retail",
+            "healthcare",
+            "beauty",
+            "fitness",
+            "automotive",
+            "real-estate",
+            "education",
+            "hospitality",
+            "manufacturing",
+            "services",
+            "technology",
+            "finance",
+            "logistics",
+            "media-entertainment",
+            "non-profit",
+            "other",
           ];
           const apiCategory = business.category || business.business_category || business.type;
           const category: BusinessCategory = validCategories.includes(apiCategory)
@@ -494,6 +509,13 @@ export default function DashboardPage() {
                     <SelectItem value="real-estate">Real Estate</SelectItem>
                     <SelectItem value="education">Education</SelectItem>
                     <SelectItem value="hospitality">Hospitality</SelectItem>
+                    <SelectItem value="manufacturing">Manufacturing/Industrial</SelectItem>
+                    <SelectItem value="services">Professional & Local Services</SelectItem>
+                    <SelectItem value="technology">Technology / IT / SaaS</SelectItem>
+                    <SelectItem value="finance">Financial Services</SelectItem>
+                    <SelectItem value="logistics">Logistics & Transport</SelectItem>
+                    <SelectItem value="media-entertainment">Media & Entertainment</SelectItem>
+                    <SelectItem value="non-profit">Non-profit / NGO</SelectItem>
                     <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>

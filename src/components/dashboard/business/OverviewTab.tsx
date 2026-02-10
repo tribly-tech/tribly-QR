@@ -172,13 +172,13 @@ function applyTimeRangeToPlatform(platform: SocialPlatformData, timeRange: TimeR
 /** Platform brand colors for Login buttons */
 const PLATFORM_BUTTON_STYLES: Record<string, string> = {
   instagram:
-    "bg-[#E4405F] text-white hover:bg-[#E4405F]/90 focus-visible:ring-[#E4405F] border-0",
+    "bg-white text-[#E4405F] border border-[#E4405F]/40 hover:bg-white hover:border-[#E4405F] focus-visible:ring-[#E4405F]",
   youtube:
-    "bg-[#FF0000] text-white hover:bg-[#FF0000]/90 focus-visible:ring-[#FF0000] border-0",
+    "bg-white text-[#FF0000] border border-[#FF0000]/40 hover:bg-white hover:border-[#FF0000] focus-visible:ring-[#FF0000]",
   facebook:
-    "bg-[#1877F2] text-white hover:bg-[#1877F2]/90 focus-visible:ring-[#1877F2] border-0",
+    "bg-white text-[#1877F2] border border-[#1877F2]/40 hover:bg-white hover:border-[#1877F2] focus-visible:ring-[#1877F2]",
   linkedin:
-    "bg-[#0A66C2] text-white hover:bg-[#0A66C2]/90 focus-visible:ring-[#0A66C2] border-0",
+    "bg-white text-[#0A66C2] border border-[#0A66C2]/40 hover:bg-white hover:border-[#0A66C2] focus-visible:ring-[#0A66C2]",
 };
 
 const formatDelta = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
@@ -669,77 +669,172 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
 
   return (
     <div className="space-y-6 mt-0">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-semibold">Business Health Overview</h2>
-            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Live sync</Badge>
+      <div className="rounded-2xl border border-purple-100/70 bg-white/95 p-4 shadow-sm backdrop-blur-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-[1.75rem] leading-tight font-semibold text-foreground">Digital Health Report</h2>
+              <Badge className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700 hover:bg-emerald-100">
+                Live sync
+              </Badge>
+            </div>
+            <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
+              Unified snapshot of your Google Business Profile and social performance.
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Unified snapshot of your Google Business Profile and social performance.
-          </p>
+          <p className="text-xs text-muted-foreground md:pt-1">Updated {lastSyncedLabel}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-white p-1.5 shadow-sm">
-          {TIME_RANGES.map((range) => (
-            <Button
-              key={range}
-              variant="ghost"
-              size="sm"
-              className={`rounded-lg ${
-                timeRange === range
-                  ? "bg-primary/10 text-primary ring-1 ring-primary/60 shadow-sm hover:bg-primary/15 hover:text-primary"
-                  : ""
-              }`}
-              onClick={() => setTimeRange(range)}
-            >
-              {range}
-            </Button>
-          ))}
+
+        <div className="mt-4 overflow-x-auto pb-1">
+          <div className="inline-flex min-w-full gap-1.5 rounded-xl border border-border/70 bg-muted/20 p-1.5">
+            {TIME_RANGES.map((range) => (
+              <Button
+                key={range}
+                variant="ghost"
+                size="sm"
+                className={`h-9 rounded-lg px-3 text-sm ${
+                  timeRange === range
+                    ? "bg-white text-primary ring-1 ring-primary/40 shadow-sm hover:bg-white hover:text-primary"
+                    : "text-foreground/85 hover:bg-white/70"
+                }`}
+                onClick={() => setTimeRange(range)}
+                aria-pressed={timeRange === range}
+              >
+                {range}
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total connected platforms</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-end gap-2">
-              <span className="text-3xl font-semibold">{summary.connected}</span>
-              <span className="text-sm text-muted-foreground">of {summary.totalPlatforms}</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">Sync status updated {lastSyncedLabel}</p>
-          </CardContent>
-        </Card>
-      <Card>
-        <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">Overall engagement growth</CardTitle>
-        </CardHeader>
-        <CardContent>
-            <div className="flex items-center gap-2">
-              <span className="text-3xl font-semibold">{summary.averageGrowth.toFixed(1)}%</span>
-              <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">+{timeRange}</Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">Across connected platforms</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">Best performing platform</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">{summary.bestPlatform}</div>
-            {summary.connected > 0 ? (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
-                <ArrowUpRight className="h-4 w-4 text-emerald-500" />
-                {formatDelta(summary.averageGrowth)} avg engagement lift
+      {/* KPI cards: horizontal scroll on mobile, grid on desktop */}
+      <div>
+        {/* Mobile: horizontal scroll, card width adapts to content */}
+        <div className="flex gap-3 overflow-x-auto pb-1 md:hidden">
+          <Card className="flex-shrink-0 rounded-2xl border border-purple-100/70 bg-white px-3 py-4 shadow-sm min-w-[260px]">
+            <CardHeader className="px-0 pt-0 pb-2.5">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Total connected platforms
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-0 pb-0">
+              <div className="flex items-end gap-2">
+                <span className="text-3xl font-semibold">{summary.connected}</span>
+                <span className="text-sm text-muted-foreground">of {summary.totalPlatforms}</span>
               </div>
-            ) : (
-              <p className="text-xs text-muted-foreground mt-2">Connect a platform to see performance.</p>
-            )}
-          </CardContent>
-        </Card>
-            </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Sync status updated {lastSyncedLabel}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="flex-shrink-0 rounded-2xl border border-purple-100/70 bg-white px-3 py-4 shadow-sm min-w-[260px]">
+            <CardHeader className="px-0 pt-0 pb-2.5">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Overall engagement growth
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-0 pb-0">
+              <div className="flex items-center gap-2">
+                <span className="text-3xl font-semibold">
+                  {summary.averageGrowth.toFixed(1)}%
+                </span>
+                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                  +{timeRange}
+                </Badge>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Across connected platforms
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="flex-shrink-0 rounded-2xl border border-purple-100/70 bg-white px-3 py-4 shadow-sm min-w-[260px]">
+            <CardHeader className="px-0 pt-0 pb-2.5">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Best performing platform
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-0 pb-0">
+              <div className="text-2xl font-semibold">{summary.bestPlatform}</div>
+              {summary.connected > 0 ? (
+                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                  <ArrowUpRight className="h-4 w-4 text-emerald-500" />
+                  {formatDelta(summary.averageGrowth)} avg engagement lift
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Connect a platform to see performance.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Desktop: keep 3-column grid */}
+        <div className="hidden gap-4 md:grid md:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Total connected platforms
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-end gap-2">
+                <span className="text-3xl font-semibold">{summary.connected}</span>
+                <span className="text-sm text-muted-foreground">
+                  of {summary.totalPlatforms}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Sync status updated {lastSyncedLabel}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Overall engagement growth
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <span className="text-3xl font-semibold">
+                  {summary.averageGrowth.toFixed(1)}%
+                </span>
+                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                  +{timeRange}
+                </Badge>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Across connected platforms
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Best performing platform
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-semibold">{summary.bestPlatform}</div>
+              {summary.connected > 0 ? (
+                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                  <ArrowUpRight className="h-4 w-4 text-emerald-500" />
+                  {formatDelta(summary.averageGrowth)} avg engagement lift
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Connect a platform to see performance.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       <div className="space-y-6">
         {/* Google Business Profile — data from same source as Google Business Health tab */}
@@ -846,17 +941,22 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                   <PerformanceTrendChart data={filteredGbp?.miniChart ?? []} className="min-h-[160px] w-full" />
                 </div>
               </div>
-              <div className="mt-6 rounded-xl border border-border/50 bg-muted/20 p-4">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
+              <div className="mt-6 space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Insights
                 </p>
-                <ul className="space-y-2">
+                <ul className="space-y-3 max-w-prose">
                   {(gbp.highlights ?? []).length === 0 ? (
-                    <li className="text-sm text-muted-foreground">No insights yet. Open Google Business Health for full analysis.</li>
+                    <li className="text-sm text-muted-foreground leading-relaxed">
+                      No insights yet. Open Google Business Health for full analysis.
+                    </li>
                   ) : (
                     (gbp.highlights ?? []).map((h) => (
-                          <li key={h} className="flex gap-2 text-sm text-muted-foreground">
-                            <AlertCircle className="h-4 w-4 shrink-0 text-amber-500 mt-0.5" />
+                          <li
+                            key={h}
+                            className="flex gap-3 text-sm text-muted-foreground leading-relaxed"
+                          >
+                            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                             <span>{h}</span>
                           </li>
                         ))
@@ -891,30 +991,30 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
         </Card>
         )}
 
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold">Social media platforms</h3>
-            <p className="text-sm text-muted-foreground">Performance across connected social channels.</p>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="mt-[120px] border-t border-dashed border-border/60 pt-4 md:mt-8 md:border-none md:pt-0">
+          <h3 className="text-lg font-semibold">Social media platforms</h3>
+          <p className="text-sm text-muted-foreground">
+            Performance across connected social channels.
+          </p>
+          <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            Data synced {lastSyncedLabel}
+            <span>Data synced {lastSyncedLabel}</span>
           </div>
         </div>
 
         <Card className="border-emerald-200/60 bg-emerald-50/40">
-          <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <CardHeader className="flex flex-col items-start gap-2 px-6 md:flex-row md:items-center md:justify-between">
             <div>
               <CardTitle>Connected platforms</CardTitle>
               <CardDescription>Live performance data streaming in real time.</CardDescription>
             </div>
-            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+            <Badge className="bg-emerald-100 px-3 py-1 text-emerald-700 hover:bg-emerald-100">
               {connectedSocialPlatforms.length} Connected
             </Badge>
           </CardHeader>
-          <CardContent className="grid gap-4 lg:grid-cols-2">
+          <CardContent className="flex gap-3 overflow-x-auto px-3 pb-2 lg:grid lg:grid-cols-2 lg:gap-4 lg:overflow-visible">
             {connectedSocialPlatforms.length === 0 ? (
-              <div className="col-span-full flex flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-white/60 py-10 text-center">
+              <div className="flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-white/60 py-10 text-center">
                 <CheckCircle2 className="h-10 w-10 text-muted-foreground/50 mb-3" />
                 <p className="text-sm font-medium text-muted-foreground">No social platforms connected yet</p>
                 <p className="text-xs text-muted-foreground mt-1">Connect platforms below to see performance here.</p>
@@ -923,7 +1023,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
               connectedSocialPlatforms.map((platform) => (
               <Card
                 key={platform.key}
-                className="hover:shadow-md transition-shadow bg-white"
+                className="flex-shrink-0 min-w-[260px] bg-white transition-shadow hover:shadow-md lg:min-w-0"
               >
                 <CardHeader className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -966,7 +1066,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
                     {(platform.commonMetrics ?? []).map((metric) => (
                       <div key={metric.label} className="rounded-lg border border-border/70 p-3">
                         <p className="text-xs text-muted-foreground">{metric.label}</p>
@@ -983,7 +1083,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                       Platform-specific highlights
                     </p>
-                    <div className="grid gap-2 md:grid-cols-3">
+                    <div className="grid gap-2 grid-cols-2 md:grid-cols-3">
                       {(platform.platformMetrics ?? []).map((metric) => (
                         <div key={metric.label} className="text-xs">
                           <p className="text-muted-foreground">{metric.label}</p>
@@ -1053,7 +1153,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
               </div>
             </div>
           </div>
-                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
+                  <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
                     {(platform.platformMetrics ?? []).map((metric) => (
                       <div
                         key={metric.label}
@@ -1100,11 +1200,16 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                   >
                     {isPlatformLoading(platform.key) ? (
                       <>
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Logging in with {platform.name}…
                       </>
                     ) : (
-                      `Login with ${platform.name}`
+                      <>
+                        <span className="mr-2 inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-sm bg-white/10">
+                          {platform.icon}
+                        </span>
+                        <span>Login with {platform.name}</span>
+                      </>
                     )}
                   </Button>
                 </CardContent>

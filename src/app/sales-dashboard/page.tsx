@@ -96,6 +96,7 @@ function SalesDashboardContent() {
     address: "",
     city: "",
     area: "",
+    pincode: "",
     category: "" as BusinessCategory | "",
     overview: "",
     googleBusinessReviewLink: "",
@@ -334,6 +335,7 @@ function SalesDashboardContent() {
               address: prev.address || mockData.address,
               city: prev.city || mockData.city,
               area: prev.area || mockData.area,
+              pincode: prev.pincode || mockData.pincode || "",
               category: prev.category || mockData.category,
               overview: prev.overview || mockData.overview,
               googleBusinessReviewLink:
@@ -413,6 +415,10 @@ function SalesDashboardContent() {
             address: qrData.business_address?.address_line1 || prev.address,
             city: qrData.business_address?.city || prev.city,
             area: qrData.business_address?.area || prev.area,
+            pincode:
+              qrData.business_address?.pincode ||
+              qrData.business_address?.postal_code ||
+              prev.pincode,
             category:
               (qrData.business_category as BusinessCategory) || prev.category,
             overview: qrData.business_description || prev.overview,
@@ -576,13 +582,15 @@ function SalesDashboardContent() {
       if (
         newBusiness.address?.trim() ||
         newBusiness.city?.trim() ||
-        newBusiness.area?.trim()
+        newBusiness.area?.trim() ||
+        newBusiness.pincode?.trim()
       ) {
         payload.address = {
           address_line1: newBusiness.address?.trim() || undefined,
           address_line2: undefined,
           city: newBusiness.city?.trim() || undefined,
           area: newBusiness.area?.trim() || undefined,
+          pincode: newBusiness.pincode?.trim() || undefined,
         };
       }
 
@@ -622,6 +630,7 @@ function SalesDashboardContent() {
         address: "",
         city: "",
         area: "",
+        pincode: "",
         category: "" as BusinessCategory | "",
         overview: "",
         googleBusinessReviewLink: "",

@@ -29,7 +29,12 @@ export type BusinessMainTab = (typeof BUSINESS_MAIN_TABS)[number];
 
 /** Business detail page: settings sub-tab (only when tab=settings) */
 export const BUSINESS_SETTINGS_SUB_PARAM = "sub" as const;
-export const BUSINESS_SETTINGS_SUB_TABS = ["links", "auto-reply", "payment"] as const;
+export const BUSINESS_SETTINGS_SUB_TABS = [
+  "business-info",
+  "links",
+  "auto-reply",
+  "payment",
+] as const;
 export type BusinessSettingsSubTab = (typeof BUSINESS_SETTINGS_SUB_TABS)[number];
 
 /** Build business detail URL with optional tab (and optional settings sub) */

@@ -68,6 +68,17 @@ export function LocationInformationCard({
               />
             </div>
           </div>
+          <div className="grid gap-2">
+            <Label htmlFor="pincode">Pincode</Label>
+            <Input
+              id="pincode"
+              placeholder="400001"
+              value={newBusiness.pincode}
+              onChange={(e) =>
+                setNewBusiness({ ...newBusiness, pincode: e.target.value })
+              }
+            />
+          </div>
         </div>
       </CardContent>
     </Card>

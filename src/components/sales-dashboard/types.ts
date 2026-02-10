@@ -127,6 +127,7 @@ export interface NewBusinessState {
   address: string;
   city: string;
   area: string;
+   pincode: string;
   category: BusinessCategory | "";
   overview: string;
   googleBusinessReviewLink: string;

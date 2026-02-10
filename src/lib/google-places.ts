@@ -118,6 +118,7 @@ export function extractAddressComponents(details: GooglePlaceDetails) {
   let area = '';
   let state = '';
   let country = '';
+  let postalCode = '';
 
   for (const component of components) {
     const types = component.types;
@@ -129,6 +130,9 @@ export function extractAddressComponents(details: GooglePlaceDetails) {
     }
     if (types.includes('sublocality') || types.includes('sublocality_level_1')) {
       area = component.long_name;
+    }
+    if (types.includes('postal_code')) {
+      postalCode = component.long_name;
     }
     if (types.includes('administrative_area_level_1')) {
       state = component.long_name;
@@ -144,6 +148,7 @@ export function extractAddressComponents(details: GooglePlaceDetails) {
     area: area || '',
     state,
     country,
+    postalCode,
   };
 }
 

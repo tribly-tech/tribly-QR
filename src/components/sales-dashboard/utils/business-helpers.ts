@@ -53,6 +53,7 @@ export const generateMockBusinessData = (
   address: string;
   city: string;
   area: string;
+  pincode: string;
   category: BusinessCategory;
   overview: string;
   googleBusinessReviewLink: string;
@@ -87,6 +88,7 @@ export const generateMockBusinessData = (
         address: addressComponents.address,
         city: addressComponents.city,
         area: addressComponents.area,
+        pincode: addressComponents.postalCode || "",
         category: category as BusinessCategory,
         overview: `Welcome to ${businessDetails.name}! We are a ${category} business committed to providing excellent service and customer satisfaction. Visit us at ${addressComponents.address}, ${addressComponents.city}.`,
         googleBusinessReviewLink: businessDetails.website || "",
@@ -105,6 +107,7 @@ export const generateMockBusinessData = (
     address: "123 Main Street, Building Name",
     city: "Visakhapatnam",
     area: "Asilmetta",
+    pincode: "400001",
     category: "retail" as BusinessCategory,
     overview: `Welcome to ${businessName}! We are committed to providing excellent service and customer satisfaction.`,
     googleBusinessReviewLink: "",
