@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactElement } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +38,7 @@ interface PlatformMetric {
 interface SocialPlatformData {
   key: string;
   name: string;
-  icon: JSX.Element;
+  icon: ReactElement;
   status: PlatformStatus;
   lastSync: string;
   engagementGrowth: number;
@@ -49,7 +50,7 @@ interface SocialPlatformData {
 
 interface GbpData {
   name: string;
-  icon: JSX.Element;
+  icon: ReactElement;
   status: PlatformStatus;
   lastSync: string;
   engagementGrowth: number;
