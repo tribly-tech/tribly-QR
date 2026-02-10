@@ -670,8 +670,11 @@ function SalesDashboardContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF]">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+    <div
+      className="min-h-screen w-full bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] relative"
+      style={{ isolation: "isolate" }}
+    >
+      <div className="container mx-auto px-4 py-8 max-w-7xl relative z-10">
         {/* Header */}
         <DashboardHeader
           user={user}
@@ -799,7 +802,10 @@ export default function SalesDashboardPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex items-center justify-center">
+        <div
+          className="min-h-screen w-full bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex items-center justify-center relative"
+          style={{ isolation: "isolate" }}
+        >
           <div className="text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
             <p className="text-muted-foreground">Loading...</p>

@@ -7,6 +7,15 @@ export default function SalesDashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <AuthGuard>{children}</AuthGuard>;
+  return (
+    <AuthGuard>
+      <div
+        className="min-h-screen w-full relative"
+        style={{ isolation: "isolate" }}
+      >
+        {children}
+      </div>
+    </AuthGuard>
+  );
 }
 
