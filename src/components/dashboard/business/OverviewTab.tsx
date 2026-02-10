@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  AlertCircle,
   ArrowUpRight,
   CheckCircle2,
   Loader2,
@@ -21,6 +22,8 @@ import {
   TriangleAlert,
   Unplug,
 } from "lucide-react";
+import { calculateGBPScore } from "@/components/sales-dashboard";
+import type { GBPAnalysisData } from "@/components/sales-dashboard/types";
 
 type TimeRange = "Week" | "Month" | "Quarterly" | "Half-yearly" | "Yearly";
 type PlatformStatus = "connected" | "not_connected" | "reconnect" | "syncing";
@@ -255,36 +258,79 @@ const Sparkline = ({ data }: { data: number[] }) => {
   );
 };
 
-/** GBP metrics grouped for intuitive scanning */
+/** GBP metrics grouped for intuitive scanning (no new fields; same as before) */
 const GBP_DISCOVERY = ["Searches", "Search views", "Maps views"] as const;
 const GBP_ACTIONS = ["Calls", "Directions", "Website clicks"] as const;
 const GBP_ENGAGEMENT = ["Reviews", "Avg rating", "Photo views"] as const;
 
-const buildInitialGbp = (businessName: string): GbpData => ({
-  name: "Google Business Profile",
-  icon: <MapPin className="h-5 w-5 text-primary" />,
-  status: "connected",
-  lastSync: "Just now",
-  engagementGrowth: 13.8,
-  miniChart: [22, 26, 30, 28, 34, 41, 39, 46],
-  primaryMetrics: [
-    { label: "Searches", value: "12.4K", delta: "+11%" },
-    { label: "Calls", value: "312", delta: "+9%" },
-    { label: "Directions", value: "184", delta: "+6%" },
-    { label: "Website clicks", value: "402", delta: "+12%" },
-  ],
-  secondaryMetrics: [
-    { label: "Search views", value: "5.6K", delta: "+8%" },
-    { label: "Maps views", value: "3.1K", delta: "+6%" },
-    { label: "Reviews", value: "146", delta: "+3%" },
-    { label: "Avg rating", value: "4.6", delta: "+0.1" },
-    { label: "Photo views", value: "9.8K", delta: "+10%" },
-  ],
-  highlights: [
-    `${businessName} appears in the top 3 local pack results for high-intent searches.`,
-    "Most conversion actions happen between 12pm and 3pm.",
-  ],
-});
+const BLANK = "—";
+
+/** GbpData with all values blank — used when no data or error (matches health tab: no data). */
+function emptyGbpData(): GbpData {
+  return {
+    name: "Google Business Profile",
+    icon: <MapPin className="h-5 w-5 text-primary" />,
+    status: "not_connected",
+    lastSync: BLANK,
+    engagementGrowth: 0,
+    miniChart: [],
+    primaryMetrics: [
+      { label: "Searches", value: BLANK },
+      { label: "Calls", value: BLANK },
+      { label: "Directions", value: BLANK },
+      { label: "Website clicks", value: BLANK },
+    ],
+    secondaryMetrics: [
+      { label: "Search views", value: BLANK },
+      { label: "Maps views", value: BLANK },
+      { label: "Reviews", value: BLANK },
+      { label: "Avg rating", value: BLANK },
+      { label: "Photo views", value: BLANK },
+    ],
+    highlights: [],
+  };
+}
+
+/**
+ * Map Google Business Health tab data (GBPAnalysisData) to Overview GBP section shape.
+ * Only existing section fields are filled; no new fields. Missing data → blank.
+ */
+function mapGBPAnalysisToGbpData(analysis: GBPAnalysisData): GbpData {
+  const formatNum = (n: number | undefined | null): string =>
+    n != null && Number.isFinite(n) ? String(n) : BLANK;
+  const rating =
+    analysis.rating != null && Number.isFinite(analysis.rating)
+      ? analysis.rating.toFixed(1)
+      : BLANK;
+
+  return {
+    name: "Google Business Profile",
+    icon: <MapPin className="h-5 w-5 text-primary" />,
+    status: "connected",
+    lastSync: BLANK,
+    engagementGrowth: 0,
+    miniChart: [],
+    primaryMetrics: [
+      { label: "Searches", value: BLANK },
+      { label: "Calls", value: BLANK },
+      { label: "Directions", value: BLANK },
+      { label: "Website clicks", value: BLANK },
+    ],
+    secondaryMetrics: [
+      { label: "Search views", value: BLANK },
+      { label: "Maps views", value: BLANK },
+      { label: "Reviews", value: formatNum(analysis.reviewCount) },
+      { label: "Avg rating", value: rating },
+      { label: "Photo views", value: formatNum(analysis.photoCount) },
+    ],
+    highlights: (analysis.insights ?? [])
+      .slice(0, 5)
+      .map((i) => (i.issue ? `${i.issue} ${i.action ?? ""}`.trim() : ""))
+      .filter(Boolean),
+  };
+}
+
+const buildInitialGbp = (businessName: string): GbpData => emptyGbpData();
 
 const buildInitialSocialPlatforms = (businessName: string): SocialPlatformData[] => [
   {
@@ -398,7 +444,10 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
 export function OverviewTab({ businessName, businessId, isLoading = false, error = null, onViewGbpReport }: OverviewTabProps) {
   const name = businessName?.trim() || DEFAULT_BUSINESS_NAME;
   const [timeRange, setTimeRange] = useState<TimeRange>("Month");
-  const [gbp, setGbp] = useState<GbpData>(() => buildInitialGbp(name));
+  const [gbp, setGbp] = useState<GbpData>(() => emptyGbpData());
+  const [gbpLoading, setGbpLoading] = useState(true);
+  const [gbpError, setGbpError] = useState<string | null>(null);
+  const gbpFromApiRef = useRef(false);
   const [socialPlatforms, setSocialPlatforms] = useState<SocialPlatformData[]>(() =>
     buildInitialSocialPlatforms(name)
   );
@@ -407,6 +456,38 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
   const [platformActionError, setPlatformActionError] = useState<Record<string, string | null>>({});
   const [disconnectConfirmKey, setDisconnectConfirmKey] = useState<string | null>(null);
   const [disconnectLoading, setDisconnectLoading] = useState(false);
+
+  // Fetch GBP data from same source as Google Business Health tab
+  useEffect(() => {
+    if (!businessName?.trim()) {
+      setGbp(emptyGbpData());
+      setGbpLoading(false);
+      setGbpError("Business name is required");
+      gbpFromApiRef.current = false;
+      return;
+    }
+    let cancelled = false;
+    setGbpLoading(true);
+    setGbpError(null);
+    gbpFromApiRef.current = false;
+    calculateGBPScore(businessName.trim(), null)
+      .then((result) => {
+        if (cancelled) return;
+        setGbp(mapGBPAnalysisToGbpData(result.analysisData));
+        setGbpError(null);
+        gbpFromApiRef.current = true;
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setGbp(emptyGbpData());
+        setGbpError(err instanceof Error ? err.message : "Failed to load GBP data");
+        gbpFromApiRef.current = false;
+      })
+      .finally(() => {
+        if (!cancelled) setGbpLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [businessName]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -426,19 +507,21 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
           };
         });
       });
-      setGbp((prev) => {
-        if (!prev || prev.status !== "connected") return prev;
-        const chart = Array.isArray(prev.miniChart) ? prev.miniChart : [];
-        const lastVal = chart.length > 0 ? chart[chart.length - 1] : 0;
-        const jitter = (Math.random() - 0.45) * 2;
-        const nextGrowth = Math.max(0, Number(prev.engagementGrowth) + jitter);
-        return {
-          ...prev,
-          engagementGrowth: Number(nextGrowth.toFixed(1)),
-          lastSync: "Just now",
-          miniChart: chart.length > 0 ? [...chart.slice(1), Math.max(6, lastVal + jitter * 2)] : chart,
-        };
-      });
+      if (!gbpFromApiRef.current) {
+        setGbp((prev) => {
+          if (!prev || prev.status !== "connected") return prev;
+          const chart = Array.isArray(prev.miniChart) ? prev.miniChart : [];
+          const lastVal = chart.length > 0 ? chart[chart.length - 1] : 0;
+          const jitter = (Math.random() - 0.45) * 2;
+          const nextGrowth = Math.max(0, Number(prev.engagementGrowth) + jitter);
+          return {
+            ...prev,
+            engagementGrowth: Number(nextGrowth.toFixed(1)),
+            lastSync: "Just now",
+            miniChart: chart.length > 0 ? [...chart.slice(1), Math.max(6, lastVal + jitter * 2)] : chart,
+          };
+        });
+      }
       setLastSynced(new Date());
     }, 8000);
 
@@ -658,8 +741,26 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
             </div>
 
       <div className="space-y-6">
-        {/* Google Business Profile — redesigned for clarity and scanability */}
+        {/* Google Business Profile — data from same source as Google Business Health tab */}
+        {gbpLoading ? (
+          <Card className="overflow-hidden border-0 bg-white shadow-sm ring-1 ring-border/60">
+            <CardContent className="flex flex-col items-center justify-center py-16">
+              <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+              <p className="text-sm text-muted-foreground">Loading Google Business Profile…</p>
+              <p className="text-xs text-muted-foreground mt-1">Same data as Google Business Health tab</p>
+            </CardContent>
+          </Card>
+        ) : (
         <Card className="overflow-hidden border-0 bg-white shadow-sm ring-1 ring-border/60">
+          {gbpError && (
+            <div className="bg-amber-50/80 border-b border-amber-200/60 px-6 py-2.5 text-xs text-amber-800">
+              Unable to load GBP data.{" "}
+              <button type="button" className="underline font-medium hover:no-underline" onClick={() => onViewGbpReport?.()}>
+                Open Google Business Health
+              </button>{" "}
+              for details.
+            </div>
+          )}
           <div className="bg-gradient-to-r from-primary/5 via-transparent to-primary/5 px-6 pt-5 pb-1">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-4">
@@ -672,7 +773,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                     Local discovery and customer actions
                   </p>
                   <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>Synced {gbp?.lastSync ?? "—"} · {TIME_RANGE_CONFIG[timeRange].label}</span>
+                    <span>Synced {gbp?.lastSync ?? BLANK} · {TIME_RANGE_CONFIG[timeRange].label}</span>
                     <span className="text-border">·</span>
                     <span>{lastSyncedLabel}</span>
                   </div>
@@ -680,9 +781,11 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
             </div>
                 <div className="flex flex-wrap items-center gap-2">
                 {getStatusBadge(gbp.status)}
+                {gbp.status === "connected" && (
                 <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-700">
                   {Number(filteredGbp?.engagementGrowth ?? gbp?.engagementGrowth ?? 0).toFixed(1)}% growth
                 </span>
+                )}
                 <Button variant="ghost" size="sm" className="text-primary hover:text-primary/90" onClick={() => onViewGbpReport?.()}>
                   View full report →
                 </Button>
@@ -691,6 +794,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
           </div>
           <CardContent className="px-6 pt-5 pb-6">
             {gbp?.status === "connected" ? (
+              <>
               <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
                 <div className="space-y-6">
                   {(() => {
@@ -739,42 +843,52 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                     <p className="mt-1 text-sm font-medium">Last 8 periods</p>
                   </div>
                   <PerformanceTrendChart data={filteredGbp?.miniChart ?? []} className="min-h-[160px] w-full" />
-                  <div className="border-t border-border/50 pt-4">
-                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
-                      Insights
-                    </p>
-                    <ul className="space-y-2">
-                      {gbp.highlights.map((h) => (
-                        <li key={h} className="flex gap-2 text-sm text-muted-foreground">
-                          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                          <span>{h}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
                 </div>
               </div>
+              <div className="mt-6 rounded-xl border border-border/50 bg-muted/20 p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
+                  Insights
+                </p>
+                <ul className="space-y-2">
+                  {(gbp.highlights ?? []).length === 0 ? (
+                    <li className="text-sm text-muted-foreground">No insights yet. Open Google Business Health for full analysis.</li>
+                  ) : (
+                    (gbp.highlights ?? []).map((h) => (
+                          <li key={h} className="flex gap-2 text-sm text-muted-foreground">
+                            <AlertCircle className="h-4 w-4 shrink-0 text-amber-500 mt-0.5" />
+                            <span>{h}</span>
+                          </li>
+                        ))
+                  )}
+                </ul>
+              </div>
+              </>
             ) : (
               <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/20 py-12 text-center">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
                   {gbp.icon}
                 </div>
-                <p className="mt-3 font-medium">Google Business Profile is not connected</p>
+                <p className="mt-3 font-medium">
+                  {gbpError ? "Unable to load Google Business Profile data" : "Google Business Profile is not connected"}
+                </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Connect to see discovery, actions, and engagement metrics.
+                  {gbpError
+                    ? "Data comes from the same source as the Google Business Health tab. Try opening the full report."
+                    : "Connect to see discovery, actions, and engagement metrics."}
                 </p>
                 <Button
                   size="sm"
                   className="mt-4"
                   variant="outline"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={() => onViewGbpReport?.()}
                 >
-                  {gbp.status === "reconnect" ? "Reconnect" : "Connect"}
+                  View full report →
                 </Button>
                 </div>
               )}
           </CardContent>
         </Card>
+        )}
 
         <div className="flex items-center justify-between">
           <div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -7,6 +8,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { GBPAnalysisData } from "@/components/sales-dashboard/types";
 import type { Top3InRadiusResult } from "@/components/sales-dashboard/types";
 import {
@@ -25,7 +32,162 @@ import {
   Loader2,
   Trophy,
   MapPin,
+  ChevronRight,
+  Lightbulb,
+  AlertTriangle,
 } from "lucide-react";
+
+type MetricStatus = "good" | "average" | "poor";
+
+const METRIC_KEYS = [
+  "searchRank",
+  "profileCompletion",
+  "seoScore",
+  "reviewScore",
+  "reviewReplyScore",
+  "responseTime",
+  "photos",
+  "reviewSentiment",
+  "localPackVisibility",
+] as const;
+
+type MetricKey = (typeof METRIC_KEYS)[number];
+
+function getMetricDetail(
+  key: MetricKey,
+  status: MetricStatus
+): { title: string; description: string; severity: "High" | "Medium" | "Low"; howToFix: string[] } {
+  const severity = status === "poor" ? "High" : status === "average" ? "Medium" : "Low";
+  const config: Record<
+    MetricKey,
+    { title: string; descriptions: Record<MetricStatus, string>; howToFix: string[] }
+  > = {
+    searchRank: {
+      title: "Google Search Rank",
+      descriptions: {
+        good: "Your business appears in strong positions on Google Search.",
+        average: "Your business sometimes appears on the first page but not consistently in top positions.",
+        poor: "Your business rarely appears in top search results, so customers may not find you easily.",
+      },
+      howToFix: [
+        "Complete and optimize your Google Business Profile with keywords customers search for.",
+        "Add a clear business description, services, and attributes.",
+        "Encourage more reviews and respond to them to improve relevance.",
+      ],
+    },
+    profileCompletion: {
+      title: "Profile Completion",
+      descriptions: {
+        good: "Your profile has the key information customers look for.",
+        average: "Some important fields are missing from your business profile.",
+        poor: "Your profile is incomplete. Missing information hurts visibility and trust.",
+      },
+      howToFix: [
+        "Fill in business hours, website, services, and a detailed description (750+ characters).",
+        "Add attributes that match your business type.",
+        "Use high-quality photos and keep information up to date.",
+      ],
+    },
+    seoScore: {
+      title: "SEO Score",
+      descriptions: {
+        good: "Your profile is well optimized for search.",
+        average: "There is room to improve how your profile matches search intent.",
+        poor: "Your profile is not optimized well for search; you may be missing local searches.",
+      },
+      howToFix: [
+        "Use relevant keywords in your business name, description, and services.",
+        "Add location-based phrases customers use when searching.",
+        "Keep your categories accurate and add all that apply.",
+      ],
+    },
+    reviewScore: {
+      title: "Review Score",
+      descriptions: {
+        good: "You are getting a healthy flow of reviews.",
+        average: "Review volume could be higher to build more trust.",
+        poor: "Too few reviews; customers rely on reviews to choose businesses.",
+      },
+      howToFix: [
+        "Ask satisfied customers for reviews (e.g. after a visit or purchase).",
+        "Use QR codes or short links to your Google review page.",
+        "Respond to every review to show you care and encourage more feedback.",
+      ],
+    },
+    reviewReplyScore: {
+      title: "Review Reply Score",
+      descriptions: {
+        good: "You respond to most reviews, which builds trust.",
+        average: "Replying to more reviews will improve trust and engagement.",
+        poor: "Unanswered reviews can make your business look inattentive.",
+      },
+      howToFix: [
+        "Aim to reply to every review within 24–48 hours.",
+        "Thank reviewers and address specific points they mentioned.",
+        "For negative reviews, acknowledge the issue and say how you will improve.",
+      ],
+    },
+    responseTime: {
+      title: "Response Time",
+      descriptions: {
+        good: "You respond to reviews quickly.",
+        average: "Faster responses can improve customer perception.",
+        poor: "Slow responses can make customers feel ignored and may hurt your reputation.",
+      },
+      howToFix: [
+        "Set a goal to respond within 24 hours when possible.",
+        "Use saved replies for common themes, but personalize when needed.",
+        "Turn on notifications so you see new reviews quickly.",
+      ],
+    },
+    photos: {
+      title: "Photos",
+      descriptions: {
+        good: "You have a solid set of photos that help customers understand your business.",
+        average: "Adding more quality photos can improve engagement and trust.",
+        poor: "Few or low-quality photos make it harder for customers to choose you.",
+      },
+      howToFix: [
+        "Add at least 15 high-quality photos (exterior, interior, products, team).",
+        "Use clear, well-lit images and update them regularly.",
+        "Add photos that show what makes your business unique.",
+      ],
+    },
+    reviewSentiment: {
+      title: "Review Sentiment",
+      descriptions: {
+        good: "Most of your reviews are positive.",
+        average: "Improving service and addressing concerns can shift sentiment up.",
+        poor: "Negative sentiment can discourage new customers from choosing you.",
+      },
+      howToFix: [
+        "Address negative feedback publicly and fix recurring issues.",
+        "Encourage happy customers to leave reviews to balance the mix.",
+        "Use feedback to improve products and service.",
+      ],
+    },
+    localPackVisibility: {
+      title: "Local Pack Visibility",
+      descriptions: {
+        good: "You appear in the local pack often for relevant searches.",
+        average: "You could appear more often in the local 3-pack with better optimization.",
+        poor: "You rarely appear in the local pack, so you miss high-intent local searches.",
+      },
+      howToFix: [
+        "Optimize your profile for local keywords and your service area.",
+        "Get more reviews and maintain a strong rating.",
+        "Keep your profile complete and your business info consistent across the web.",
+      ],
+    },
+  };
+  const c = config[key];
+  return {
+    title: c.title,
+    description: c.descriptions[status],
+    severity,
+    howToFix: c.howToFix,
+  };
+}
 
 function getStatusFromScore(score: number): "good" | "average" | "poor" {
   if (score > 70) return "good";
@@ -89,6 +251,15 @@ export function GBPHealthReportView({
   top3Result = null,
   top3Loading = false,
 }: GBPHealthReportViewProps) {
+  const [selectedMetric, setSelectedMetric] = useState<{
+    key: MetricKey;
+    status: MetricStatus;
+  } | null>(null);
+
+  const detail = selectedMetric
+    ? getMetricDetail(selectedMetric.key, selectedMetric.status)
+    : null;
+
   return (
     <div className="space-y-6">
       {/* Business Details and Rank Card */}
@@ -316,18 +487,44 @@ export function GBPHealthReportView({
         </CardContent>
       </Card>
 
-      {/* Detailed Metrics Grid */}
+      {/* Detailed Metrics Grid — click card to open problem detail */}
       <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 gap-5 overflow-x-auto md:overflow-x-visible pb-4 md:pb-0 px-1 md:px-0 scrollbar-hide">
-        <Card className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
+        <Card
+          className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink cursor-pointer hover:shadow-md hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
+          tabIndex={0}
+          role="button"
+          onClick={() =>
+            setSelectedMetric({
+              key: "searchRank",
+              status:
+                gbpAnalysisData.metricScores?.searchRank != null
+                  ? getStatusFromScore(gbpAnalysisData.metricScores.searchRank)
+                  : getStatus(gbpAnalysisData.googleSearchRank, { good: 5, average: 10 }),
+            })
+          }
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setSelectedMetric({
+                key: "searchRank",
+                status:
+                  gbpAnalysisData.metricScores?.searchRank != null
+                    ? getStatusFromScore(gbpAnalysisData.metricScores.searchRank)
+                    : getStatus(gbpAnalysisData.googleSearchRank, { good: 5, average: 10 }),
+              });
+            }
+          }}
+        >
           <CardHeader className="pb-4 border-b border-gray-200 mb-6">
             <div className="flex items-start gap-3">
               <div className="p-2.5 rounded-xl bg-blue-50">
                 <SearchIcon className="h-5 w-5 text-blue-600" />
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col flex-1">
                 <CardTitle className="text-base font-semibold text-gray-900">Google Search Rank</CardTitle>
                 <CardDescription className="text-xs text-gray-600 mt-1">Average position on Google Search</CardDescription>
               </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
             </div>
           </CardHeader>
           <CardContent>
@@ -353,16 +550,42 @@ export function GBPHealthReportView({
           </CardContent>
         </Card>
 
-        <Card className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
+        <Card
+          className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink cursor-pointer hover:shadow-md hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
+          tabIndex={0}
+          role="button"
+          onClick={() =>
+            setSelectedMetric({
+              key: "profileCompletion",
+              status:
+                gbpAnalysisData.metricScores?.profileCompletion != null
+                  ? getStatusFromScore(gbpAnalysisData.metricScores.profileCompletion)
+                  : getStatus(100 - gbpAnalysisData.profileCompletion, { good: 20, average: 40 }),
+            })
+          }
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setSelectedMetric({
+                key: "profileCompletion",
+                status:
+                  gbpAnalysisData.metricScores?.profileCompletion != null
+                    ? getStatusFromScore(gbpAnalysisData.metricScores.profileCompletion)
+                    : getStatus(100 - gbpAnalysisData.profileCompletion, { good: 20, average: 40 }),
+              });
+            }
+          }}
+        >
           <CardHeader className="pb-4 border-b border-gray-200 mb-6">
             <div className="flex items-start gap-3">
               <div className="p-2.5 rounded-xl bg-purple-50">
                 <FileText className="h-5 w-5 text-purple-600" />
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col flex-1">
                 <CardTitle className="text-base font-semibold text-gray-900">Profile Completion</CardTitle>
                 <CardDescription className="text-xs text-gray-600 mt-1">Completeness of business profile information</CardDescription>
               </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
             </div>
           </CardHeader>
           <CardContent>
@@ -384,16 +607,36 @@ export function GBPHealthReportView({
           </CardContent>
         </Card>
 
-        <Card className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
+        <Card
+          className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink cursor-pointer hover:shadow-md hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
+          tabIndex={0}
+          role="button"
+          onClick={() =>
+            setSelectedMetric({
+              key: "seoScore",
+              status:
+                gbpAnalysisData.metricScores?.seoScore != null
+                  ? getStatusFromScore(gbpAnalysisData.metricScores.seoScore)
+                  : getStatus(100 - gbpAnalysisData.seoScore, { good: 30, average: 60 }),
+            })
+          }
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setSelectedMetric({ key: "seoScore", status: gbpAnalysisData.metricScores?.seoScore != null ? getStatusFromScore(gbpAnalysisData.metricScores.seoScore) : getStatus(100 - gbpAnalysisData.seoScore, { good: 30, average: 60 }) });
+            }
+          }}
+        >
           <CardHeader className="pb-4 border-b border-gray-200 mb-6">
             <div className="flex items-start gap-3">
               <div className="p-2.5 rounded-xl bg-green-50">
                 <TrendingUp className="h-5 w-5 text-green-600" />
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col flex-1">
                 <CardTitle className="text-base font-semibold text-gray-900">SEO Score</CardTitle>
                 <CardDescription className="text-xs text-gray-600 mt-1">Search engine optimization effectiveness</CardDescription>
               </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
             </div>
           </CardHeader>
           <CardContent>
@@ -415,16 +658,36 @@ export function GBPHealthReportView({
           </CardContent>
         </Card>
 
-        <Card className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
+        <Card
+          className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink cursor-pointer hover:shadow-md hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
+          tabIndex={0}
+          role="button"
+          onClick={() =>
+            setSelectedMetric({
+              key: "reviewScore",
+              status:
+                gbpAnalysisData.metricScores?.reviewScore != null
+                  ? getStatusFromScore(gbpAnalysisData.metricScores.reviewScore)
+                  : getStatus(2 - gbpAnalysisData.reviewScore, { good: 0, average: 1 }),
+            })
+          }
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setSelectedMetric({ key: "reviewScore", status: gbpAnalysisData.metricScores?.reviewScore != null ? getStatusFromScore(gbpAnalysisData.metricScores.reviewScore) : getStatus(2 - gbpAnalysisData.reviewScore, { good: 0, average: 1 }) });
+            }
+          }}
+        >
           <CardHeader className="pb-4 border-b border-gray-200 mb-6">
             <div className="flex items-start gap-3">
               <div className="p-2.5 rounded-xl bg-yellow-50">
                 <Star className="h-5 w-5 text-yellow-600 fill-yellow-600" />
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col flex-1">
                 <CardTitle className="text-base font-semibold text-gray-900">Review Score</CardTitle>
                 <CardDescription className="text-xs text-gray-600 mt-1">Average number of reviews received per week</CardDescription>
               </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
             </div>
           </CardHeader>
           <CardContent>
@@ -447,16 +710,36 @@ export function GBPHealthReportView({
           </CardContent>
         </Card>
 
-        <Card className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
+        <Card
+          className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink cursor-pointer hover:shadow-md hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
+          tabIndex={0}
+          role="button"
+          onClick={() =>
+            setSelectedMetric({
+              key: "reviewReplyScore",
+              status:
+                gbpAnalysisData.metricScores?.reviewReplyScore != null
+                  ? getStatusFromScore(gbpAnalysisData.metricScores.reviewReplyScore)
+                  : getStatus(100 - gbpAnalysisData.reviewReplyScore, { good: 20, average: 50 }),
+            })
+          }
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setSelectedMetric({ key: "reviewReplyScore", status: gbpAnalysisData.metricScores?.reviewReplyScore != null ? getStatusFromScore(gbpAnalysisData.metricScores.reviewReplyScore) : getStatus(100 - gbpAnalysisData.reviewReplyScore, { good: 20, average: 50 }) });
+            }
+          }}
+        >
           <CardHeader className="pb-4 border-b border-gray-200 mb-6">
             <div className="flex items-start gap-3">
               <div className="p-2.5 rounded-xl bg-indigo-50">
                 <CheckCircle2 className="h-5 w-5 text-indigo-600" />
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col flex-1">
                 <CardTitle className="text-base font-semibold text-gray-900">Review Reply Score</CardTitle>
                 <CardDescription className="text-xs text-gray-600 mt-1">Percentage of reviews responded to</CardDescription>
               </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
             </div>
           </CardHeader>
           <CardContent>
@@ -478,16 +761,36 @@ export function GBPHealthReportView({
           </CardContent>
         </Card>
 
-        <Card className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
+        <Card
+          className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink cursor-pointer hover:shadow-md hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
+          tabIndex={0}
+          role="button"
+          onClick={() =>
+            setSelectedMetric({
+              key: "responseTime",
+              status:
+                gbpAnalysisData.metricScores?.responseTime != null
+                  ? getStatusFromScore(gbpAnalysisData.metricScores.responseTime)
+                  : getStatus(gbpAnalysisData.responseTime, { good: 24, average: 72 }),
+            })
+          }
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setSelectedMetric({ key: "responseTime", status: gbpAnalysisData.metricScores?.responseTime != null ? getStatusFromScore(gbpAnalysisData.metricScores.responseTime) : getStatus(gbpAnalysisData.responseTime, { good: 24, average: 72 }) });
+            }
+          }}
+        >
           <CardHeader className="pb-4 border-b border-gray-200 mb-6">
             <div className="flex items-start gap-3">
               <div className="p-2.5 rounded-xl bg-orange-50">
                 <Clock className="h-5 w-5 text-orange-600" />
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col flex-1">
                 <CardTitle className="text-base font-semibold text-gray-900">Response Time</CardTitle>
                 <CardDescription className="text-xs text-gray-600 mt-1">Average time to respond to reviews</CardDescription>
               </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
             </div>
           </CardHeader>
           <CardContent>
@@ -511,16 +814,42 @@ export function GBPHealthReportView({
           </CardContent>
         </Card>
 
-        <Card className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
+        <Card
+          className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink cursor-pointer hover:shadow-md hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
+          tabIndex={0}
+          role="button"
+          onClick={() =>
+            setSelectedMetric({
+              key: "photos",
+              status:
+                gbpAnalysisData.metricScores?.photoCount != null && gbpAnalysisData.metricScores?.photoQuality != null
+                  ? getStatusFromScore((gbpAnalysisData.metricScores.photoCount + gbpAnalysisData.metricScores.photoQuality) / 2)
+                  : getStatus(15 - gbpAnalysisData.photoCount, { good: 0, average: 5 }),
+            })
+          }
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setSelectedMetric({
+                key: "photos",
+                status:
+                  gbpAnalysisData.metricScores?.photoCount != null && gbpAnalysisData.metricScores?.photoQuality != null
+                    ? getStatusFromScore((gbpAnalysisData.metricScores.photoCount + gbpAnalysisData.metricScores.photoQuality) / 2)
+                    : getStatus(15 - gbpAnalysisData.photoCount, { good: 0, average: 5 }),
+              });
+            }
+          }}
+        >
           <CardHeader className="pb-4 border-b border-gray-200 mb-6">
             <div className="flex items-start gap-3">
               <div className="p-2.5 rounded-xl bg-pink-50">
                 <Image className="h-5 w-5 text-pink-600" />
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col flex-1">
                 <CardTitle className="text-base font-semibold text-gray-900">Photos</CardTitle>
                 <CardDescription className="text-xs text-gray-600 mt-1">Photo count and quality score</CardDescription>
               </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
             </div>
           </CardHeader>
           <CardContent>
@@ -546,16 +875,36 @@ export function GBPHealthReportView({
           </CardContent>
         </Card>
 
-        <Card className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
+        <Card
+          className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink cursor-pointer hover:shadow-md hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
+          tabIndex={0}
+          role="button"
+          onClick={() =>
+            setSelectedMetric({
+              key: "reviewSentiment",
+              status:
+                gbpAnalysisData.metricScores?.positiveSentiment != null
+                  ? getStatusFromScore(gbpAnalysisData.metricScores.positiveSentiment)
+                  : getStatus(100 - gbpAnalysisData.positiveReviews, { good: 20, average: 40 }),
+            })
+          }
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setSelectedMetric({ key: "reviewSentiment", status: gbpAnalysisData.metricScores?.positiveSentiment != null ? getStatusFromScore(gbpAnalysisData.metricScores.positiveSentiment) : getStatus(100 - gbpAnalysisData.positiveReviews, { good: 20, average: 40 }) });
+            }
+          }}
+        >
           <CardHeader className="pb-4 border-b border-gray-200 mb-6">
             <div className="flex items-start gap-3">
               <div className="p-2.5 rounded-xl bg-teal-50">
                 <BarChart3 className="h-5 w-5 text-teal-600" />
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col flex-1">
                 <CardTitle className="text-base font-semibold text-gray-900">Review Sentiment</CardTitle>
                 <CardDescription className="text-xs text-gray-600 mt-1">Breakdown of review ratings</CardDescription>
               </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
             </div>
           </CardHeader>
           <CardContent>
@@ -590,16 +939,36 @@ export function GBPHealthReportView({
           </CardContent>
         </Card>
 
-        <Card className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
+        <Card
+          className="border border-gray-200 transition-shadow min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink cursor-pointer hover:shadow-md hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
+          tabIndex={0}
+          role="button"
+          onClick={() =>
+            setSelectedMetric({
+              key: "localPackVisibility",
+              status:
+                gbpAnalysisData.metricScores?.localPackVisibility != null
+                  ? getStatusFromScore(gbpAnalysisData.metricScores.localPackVisibility)
+                  : getStatus(100 - gbpAnalysisData.localPackAppearances, { good: 30, average: 60 }),
+            })
+          }
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setSelectedMetric({ key: "localPackVisibility", status: gbpAnalysisData.metricScores?.localPackVisibility != null ? getStatusFromScore(gbpAnalysisData.metricScores.localPackVisibility) : getStatus(100 - gbpAnalysisData.localPackAppearances, { good: 30, average: 60 }) });
+            }
+          }}
+        >
           <CardHeader className="pb-4 border-b border-gray-200 mb-6">
             <div className="flex items-start gap-3">
               <div className="p-2.5 rounded-xl bg-cyan-50">
                 <Target className="h-5 w-5 text-cyan-600" />
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col flex-1">
                 <CardTitle className="text-base font-semibold text-gray-900">Local Pack Visibility</CardTitle>
                 <CardDescription className="text-xs text-gray-600 mt-1">Frequency in Google's local 3-pack</CardDescription>
               </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
             </div>
           </CardHeader>
           <CardContent>
@@ -621,6 +990,79 @@ export function GBPHealthReportView({
           </CardContent>
         </Card>
       </div>
+
+      {/* Problem detail dialog — structured, readable redesign */}
+      <Dialog open={!!selectedMetric} onOpenChange={(open) => !open && setSelectedMetric(null)}>
+        <DialogContent className="max-w-lg rounded-2xl shadow-xl border-0 p-0 gap-0 overflow-hidden">
+          {detail && (
+            <>
+              {/* Header: metric name + severity (extra right/top padding for close button) */}
+              <div className="bg-muted/40 pl-6 pr-12 pt-10 pb-5 border-b border-border/60">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <DialogTitle className="text-xl font-semibold tracking-tight text-foreground">
+                    {detail.title}
+                  </DialogTitle>
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 ${
+                      detail.severity === "High"
+                        ? "bg-red-100 text-red-800"
+                        : detail.severity === "Medium"
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-emerald-100 text-emerald-800"
+                    }`}
+                  >
+                    {detail.severity === "High" && <AlertTriangle className="h-3.5 w-3.5" />}
+                    {detail.severity} severity
+                  </span>
+                </div>
+              </div>
+
+              <div className="px-6 py-5 space-y-6 max-h-[70vh] overflow-y-auto">
+                {/* Problem — what's going on */}
+                <section className="space-y-2">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-muted text-muted-foreground text-xs font-bold">
+                      1
+                    </span>
+                    What&apos;s going on
+                  </h3>
+                  <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3.5">
+                    <p className="text-sm text-foreground leading-[1.6]">
+                      {detail.description}
+                    </p>
+                  </div>
+                </section>
+
+                {/* How to fix — actionable steps */}
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <Lightbulb className="h-4 w-4 text-amber-500" />
+                    How to fix it
+                  </h3>
+                  <ol className="space-y-3">
+                    {detail.howToFix.map((step, i) => (
+                      <li
+                        key={i}
+                        className="flex gap-3 rounded-xl border border-border/60 bg-white px-4 py-3.5 shadow-sm"
+                      >
+                        <span
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary text-sm font-bold"
+                          aria-hidden
+                        >
+                          {i + 1}
+                        </span>
+                        <p className="text-sm text-foreground leading-[1.6] pt-0.5">
+                          {step}
+                        </p>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
