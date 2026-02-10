@@ -746,24 +746,13 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
       <div className="rounded-2xl border border-purple-100/70 bg-white/95 p-4 shadow-sm backdrop-blur-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-[1.75rem] leading-tight font-semibold text-foreground">Digital Health Report</h2>
-              <Badge className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700 hover:bg-emerald-100">
-                Live sync
-              </Badge>
-            </div>
+            <h2 className="text-[1.75rem] leading-tight font-semibold text-foreground">
+              Digital Health Report
+            </h2>
             <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
               Unified snapshot of your Google Business Profile and social performance.
             </p>
-            {/* Mobile-only updated timestamp, tucked under description for a compact card feel */}
-            <p className="mt-2 text-xs text-muted-foreground md:hidden">
-              Updated {lastSyncedLabel}
-            </p>
           </div>
-          {/* Desktop / tablet updated timestamp on the right, unchanged */}
-          <p className="hidden text-xs text-muted-foreground md:block md:pt-1">
-            Updated {lastSyncedLabel}
-          </p>
         </div>
 
         <div className="mt-4">
