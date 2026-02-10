@@ -33,6 +33,7 @@ export function SubmitButtonCard({
       address: "",
       city: "",
       area: "",
+      pincode: "",
       category: "" as BusinessCategory | "",
       overview: "",
       googleBusinessReviewLink: "",
