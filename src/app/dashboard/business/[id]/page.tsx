@@ -927,7 +927,6 @@ export default function BusinessDetailPage() {
                   {getStatusBadge(business.status)}
                 </div>
                 <p className="text-xs font-medium text-muted-foreground">powered by tribly.ai</p>
-                <p className="text-muted-foreground">{business.email}</p>
               </div>
             </div>
             {currentUser && (
