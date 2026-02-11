@@ -20,7 +20,6 @@ export const BUSINESS_TAB_PARAM = "tab" as const;
 export const BUSINESS_MAIN_TABS = [
   "gmb-health",
   "recommended-actions",
-  "keywords",
   "overview",
   "reviews",
   "settings",
@@ -31,6 +30,7 @@ export type BusinessMainTab = (typeof BUSINESS_MAIN_TABS)[number];
 export const BUSINESS_SETTINGS_SUB_PARAM = "sub" as const;
 export const BUSINESS_SETTINGS_SUB_TABS = [
   "business-info",
+  "keywords",
   "links",
   "auto-reply",
   "payment",

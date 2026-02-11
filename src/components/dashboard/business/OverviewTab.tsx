@@ -21,6 +21,8 @@ import {
   AlertCircle,
   ArrowUpRight,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Loader2,
   MapPin,
   TriangleAlert,
@@ -81,11 +83,30 @@ const TIME_RANGE_CONFIG: Record<
   { volumeMultiplier: number; chartPoints: number; growthMultiplier: number; label: string }
 > = {
   Week: { volumeMultiplier: 0.25, chartPoints: 7, growthMultiplier: 0.4, label: "Last 7 days" },
-  Month: { volumeMultiplier: 1, chartPoints: 8, growthMultiplier: 1, label: "Last 30 days" },
-  Quarterly: { volumeMultiplier: 3, chartPoints: 12, growthMultiplier: 1.15, label: "Last 3 months" },
-  "Half-yearly": { volumeMultiplier: 6, chartPoints: 24, growthMultiplier: 1.25, label: "Last 6 months" },
-  Yearly: { volumeMultiplier: 12, chartPoints: 52, growthMultiplier: 1.4, label: "Last 12 months" },
+  Month: { volumeMultiplier: 1, chartPoints: 4, growthMultiplier: 1, label: "Last 30 days" },
+  Quarterly: { volumeMultiplier: 3, chartPoints: 3, growthMultiplier: 1.15, label: "Last 3 months" },
+  "Half-yearly": { volumeMultiplier: 6, chartPoints: 6, growthMultiplier: 1.25, label: "Last 6 months" },
+  Yearly: { volumeMultiplier: 12, chartPoints: 12, growthMultiplier: 1.4, label: "Last 12 months" },
 };
+
+/** X-axis period label by time range: Week D1–D7, Month W1–W4, Quarterly M1–M3, Half-yearly M1–M6, Yearly M1–M12. */
+function getPeriodLabel(timeRange: TimeRange, index: number, total: number): string {
+  if (total <= 0) return `P${index + 1}`;
+  switch (timeRange) {
+    case "Week":
+      return `D${index + 1}`;
+    case "Month":
+      return `W${Math.floor((index * 4) / total) + 1}`;
+    case "Quarterly":
+      return `M${Math.floor((index * 3) / total) + 1}`;
+    case "Half-yearly":
+      return `M${Math.floor((index * 6) / total) + 1}`;
+    case "Yearly":
+      return `M${Math.min(12, Math.floor((index * 12) / total) + 1)}`;
+    default:
+      return `P${index + 1}`;
+  }
+}
 
 function parseMetricNumber(value: string): number | null {
   const cleaned = value.replace(/,/g, "").trim().replace(/^[+\-]/, "");
@@ -187,23 +208,6 @@ const PLATFORM_BUTTON_STYLES: Record<string, string> = {
 
 const formatDelta = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
 
-const getStatusBadge = (status: PlatformStatus) => {
-  switch (status) {
-    case "connected":
-      return (
-        <Badge className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-700 hover:bg-emerald-100">
-          Connected
-        </Badge>
-      );
-    case "syncing":
-      return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">Syncing</Badge>;
-    case "reconnect":
-      return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Reconnect</Badge>;
-    default:
-      return <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100">Not connected</Badge>;
-  }
-};
-
 const performanceChartConfig = {
   value: {
     label: "Performance",
@@ -211,10 +215,22 @@ const performanceChartConfig = {
   },
 } satisfies ChartConfig;
 
-function PerformanceTrendChart({ data, className }: { data: number[]; className?: string }) {
+function PerformanceTrendChart({
+  data,
+  timeRange,
+  className,
+}: {
+  data: number[];
+  timeRange: TimeRange;
+  className?: string;
+}) {
   const chartData = useMemo(
-    () => (Array.isArray(data) ? data : []).map((value, i) => ({ period: `${i + 1}`, value: Number(value) || 0 })),
-    [data]
+    () =>
+      (Array.isArray(data) ? data : []).map((value, i) => ({
+        period: getPeriodLabel(timeRange, i, data.length),
+        value: Number(value) || 0,
+      })),
+    [data, timeRange]
   );
   if (chartData.length === 0) {
     return (
@@ -234,7 +250,6 @@ function PerformanceTrendChart({ data, className }: { data: number[]; className?
           tickLine={false}
           axisLine={false}
           tickMargin={8}
-          tickFormatter={(v) => `P${v}`}
         />
         <YAxis hide />
         <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
@@ -260,20 +275,22 @@ const engagementChartConfig = {
 
 function PlatformEngagementChart({
   data,
+  timeRange,
   platformName,
   className,
 }: {
   data: number[];
+  timeRange: TimeRange;
   platformName?: string;
   className?: string;
 }) {
   const chartData = useMemo(
     () =>
       (Array.isArray(data) ? data : []).map((value, i) => ({
-        period: `P${i + 1}`,
+        period: getPeriodLabel(timeRange, i, data.length),
         value: Number(value) || 0,
       })),
-    [data]
+    [data, timeRange]
   );
   if (chartData.length === 0) {
     return (
@@ -531,8 +548,18 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
   const [platformActionError, setPlatformActionError] = useState<Record<string, string | null>>({});
   const [disconnectConfirmKey, setDisconnectConfirmKey] = useState<string | null>(null);
   const [disconnectLoading, setDisconnectLoading] = useState(false);
+  const connectedPlatformsScrollRef = useRef<HTMLDivElement>(null);
 
-  // Fetch GBP data from same source as Google Business Health tab
+  const scrollConnectedPlatforms = (direction: "left" | "right") => {
+    const el = connectedPlatformsScrollRef.current;
+    if (!el) return;
+    const cardWidth = 364;
+    const gap = 12;
+    const step = cardWidth + gap;
+    el.scrollBy({ left: direction === "left" ? -step : step, behavior: "smooth" });
+  };
+
+  // Fetch GBP data
   useEffect(() => {
     if (!businessName?.trim()) {
       setGbp(emptyGbpData());
@@ -972,7 +999,6 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                 </div>
             </div>
                 <div className="flex flex-wrap items-center gap-2">
-                {getStatusBadge(gbp.status)}
                 {gbp.status === "connected" && (
                   <Badge className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-700 hover:bg-emerald-100">
                     {Number(filteredGbp?.engagementGrowth ?? gbp?.engagementGrowth ?? 0).toFixed(1)}% growth
@@ -1032,9 +1058,13 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                     <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                       Performance trend
                     </p>
-                    <p className="mt-1 text-sm font-medium">Last 8 periods</p>
+                    <p className="mt-1 text-sm font-medium">{TIME_RANGE_CONFIG[timeRange].label}</p>
                   </div>
-                  <PerformanceTrendChart data={filteredGbp?.miniChart ?? []} className="min-h-[160px] w-full" />
+                  <PerformanceTrendChart
+                    data={filteredGbp?.miniChart ?? []}
+                    timeRange={timeRange}
+                    className="min-h-[160px] w-full"
+                  />
                 </div>
               </div>
               <div className="mt-6 space-y-3">
@@ -1110,7 +1140,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
               {connectedSocialPlatforms.length} Connected
             </Badge>
           </CardHeader>
-          <CardContent className="flex gap-3 overflow-x-auto px-3 pb-2 lg:grid lg:grid-cols-2 lg:gap-4 lg:overflow-visible">
+          <CardContent className="px-3 pb-2">
             {connectedSocialPlatforms.length === 0 ? (
               <div className="flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-white/60 py-10 text-center">
                 <CheckCircle2 className="h-10 w-10 text-muted-foreground/50 mb-3" />
@@ -1118,10 +1148,15 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                 <p className="text-xs text-muted-foreground mt-1">Connect platforms below to see performance here.</p>
               </div>
             ) : (
-              connectedSocialPlatforms.map((platform) => (
+              <>
+                <div
+                  ref={connectedPlatformsScrollRef}
+                  className="flex gap-3 overflow-x-auto lg:grid lg:grid-cols-2 lg:gap-4 lg:overflow-visible"
+                >
+              {connectedSocialPlatforms.map((platform) => (
               <Card
                 key={platform.key}
-                className="flex-shrink-0 min-w-[260px] bg-white transition-shadow hover:shadow-md lg:min-w-0"
+                className="flex-shrink-0 min-w-[364px] bg-white transition-shadow hover:shadow-md lg:min-w-0"
               >
                 <CardHeader className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -1134,21 +1169,18 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                         <CardDescription>Last sync: {platform.lastSync}</CardDescription>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {getStatusBadge(platform.status)}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDisconnectConfirmKey(platform.key);
-                        }}
-                        title={`Disconnect ${platform.name}`}
-                      >
-                        <Unplug className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDisconnectConfirmKey(platform.key);
+                      }}
+                      title={`Disconnect ${platform.name}`}
+                    >
+                      <Unplug className="h-4 w-4" />
+                    </Button>
                   </div>
                   <div className="grid gap-3 md:grid-cols-[1fr_auto] items-center">
                     <div>
@@ -1160,7 +1192,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                       </Badge>
                       </div>
                     </div>
-                    <PlatformEngagementChart data={platform.miniChart} platformName={platform.name} />
+                    <PlatformEngagementChart data={platform.miniChart} timeRange={timeRange} platformName={platform.name} />
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -1195,7 +1227,31 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
           </div>
         </CardContent>
       </Card>
-              ))
+              ))}
+                </div>
+                <div className="flex justify-center gap-2 pt-3 lg:hidden">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 rounded-full"
+                    onClick={() => scrollConnectedPlatforms("left")}
+                    aria-label="Previous platform"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 rounded-full"
+                    onClick={() => scrollConnectedPlatforms("right")}
+                    aria-label="Next platform"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </>
             )}
         </CardContent>
       </Card>
@@ -1234,7 +1290,6 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                         <CardDescription>Last sync: {platform.lastSync}</CardDescription>
                       </div>
                     </div>
-                    {getStatusBadge(platform.status)}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">

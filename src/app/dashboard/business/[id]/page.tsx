@@ -75,7 +75,6 @@ const MOBILE_MAIN_TAB_ITEMS: Array<{
   { value: "overview", label: "Overview", shortLabel: "Overview", icon: LayoutDashboard },
   { value: "gmb-health", label: "Business Health", shortLabel: "Health", icon: Target },
   { value: "recommended-actions", label: "Actions", shortLabel: "Actions", icon: Lightbulb },
-  { value: "keywords", label: "Keywords", shortLabel: "Keywords", icon: Hash },
   { value: "reviews", label: "Reviews", shortLabel: "Reviews", icon: Star },
   { value: "settings", label: "Settings", shortLabel: "Settings", icon: Settings },
 ];
@@ -120,6 +119,14 @@ export default function BusinessDetailPage() {
   // Sync tab state from URL (deep links, refresh, back/forward)
   useEffect(() => {
     const tab = searchParams.get("tab");
+    // Redirect legacy ?tab=keywords to Settings > Keywords
+    if (tab === "keywords") {
+      const next = new URLSearchParams(searchParams?.toString() ?? "");
+      next.set("tab", "settings");
+      next.set("sub", "keywords");
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+      return;
+    }
     const mainTab: (typeof BUSINESS_MAIN_TABS)[number] =
       tab && BUSINESS_MAIN_TABS.includes(tab as (typeof BUSINESS_MAIN_TABS)[number]) ? (tab as (typeof BUSINESS_MAIN_TABS)[number]) : DEFAULT_TAB;
     setActiveTab(mainTab);
@@ -129,7 +136,7 @@ export default function BusinessDetailPage() {
         sub && BUSINESS_SETTINGS_SUB_TABS.includes(sub as (typeof BUSINESS_SETTINGS_SUB_TABS)[number]) ? (sub as (typeof BUSINESS_SETTINGS_SUB_TABS)[number]) : DEFAULT_SETTINGS_SUB;
       setSettingsSubTab(subTab);
     }
-  }, [searchParams]);
+  }, [searchParams, pathname, router]);
 
   const handleMainTabChange = (value: string) => {
     const next = new URLSearchParams(searchParams?.toString() ?? "");
@@ -909,12 +916,19 @@ export default function BusinessDetailPage() {
           </Button>
           )}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold">{business.name}</h1>
-                {getStatusBadge(business.status)}
+            <div className="flex items-center gap-3">
+              <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-full bg-white ring-1 ring-border/80 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)]">
+                <img src="/icon.png" alt="" className="h-full w-full object-cover" />
+                <div className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/50 via-white/10 to-transparent" aria-hidden="true" />
               </div>
-              <p className="text-muted-foreground">{business.email}</p>
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <h1 className="text-3xl font-bold">{business.name}</h1>
+                  {getStatusBadge(business.status)}
+                </div>
+                <p className="text-xs font-medium text-muted-foreground">powered by tribly.ai</p>
+                <p className="text-muted-foreground">{business.email}</p>
+              </div>
             </div>
             {currentUser && (
               <Button
@@ -946,25 +960,16 @@ export default function BusinessDetailPage() {
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
                 )}
+                <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-full bg-white ring-1 ring-border/80 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)]">
+                  <img src="/icon.png" alt="" className="h-full w-full object-cover" />
+                  <div className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/50 via-white/10 to-transparent" aria-hidden="true" />
+                </div>
                 <div className="min-w-0">
                   <h1 className="truncate text-xl font-semibold leading-tight text-foreground">{business.name}</h1>
+                  <p className="mt-0.5 text-[10px] font-medium text-muted-foreground">powered by tribly.ai</p>
                 </div>
               </div>
                 <div className="flex items-center gap-1.5">
-                  <Badge
-                    className={`rounded-full px-3 py-1 text-xs font-medium border ${
-                      business.status === "active"
-                        ? "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-50"
-                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-50"
-                    }`}
-                  >
-                    {business.status === "active" ? (
-                      <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                    ) : (
-                      <XCircle className="mr-1 h-3.5 w-3.5" />
-                    )}
-                    {business.status === "active" ? "Active" : "Inactive"}
-                  </Badge>
                   {currentUser && (
                     <Button
                       variant="ghost"
@@ -1033,18 +1038,6 @@ export default function BusinessDetailPage() {
               </div>
             </TabsTrigger>
             <TabsTrigger
-              value="keywords"
-              className="w-full justify-start rounded-md data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm transition-all py-3 h-auto"
-            >
-              <div className="flex items-start gap-3 w-full">
-                <Hash className="h-5 w-5 mt-0.5 flex-shrink-0" />
-                <div className="flex flex-col items-start gap-0.5 flex-1">
-                  <span className="font-medium">Keywords</span>
-                  <span className="text-xs opacity-70">Manage search terms</span>
-                </div>
-              </div>
-            </TabsTrigger>
-            <TabsTrigger
               value="reviews"
               className="w-full justify-start rounded-md data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
@@ -1085,16 +1078,23 @@ export default function BusinessDetailPage() {
           <TabsContent value="settings" className="space-y-6 mt-0">
             <Tabs value={settingsSubTab} onValueChange={handleSettingsSubChange} className="w-full">
               {/* Settings sub-tabs */}
-              {/* Desktop: 4-column grid */}
+              {/* Desktop: 5-column grid (Business Info, Keywords, Links, Auto Reply, Payment) */}
               <div className="hidden md:block">
                 <div className="rounded-xl border border-border/80 bg-white p-1.5 shadow-sm">
-                  <TabsList className="grid h-auto w-full grid-cols-4 gap-1.5 border-0 bg-transparent p-0 shadow-none">
+                  <TabsList className="grid h-auto w-full grid-cols-5 gap-1.5 border-0 bg-transparent p-0 shadow-none">
                     <TabsTrigger
                       value="business-info"
                       className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
                     >
                       <LayoutDashboard className="h-4 w-4 shrink-0" />
                       <span>Business Info</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="keywords"
+                      className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
+                    >
+                      <Hash className="h-4 w-4 shrink-0" />
+                      <span>Keywords</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value="links"
@@ -1134,6 +1134,13 @@ export default function BusinessDetailPage() {
                     >
                       <LayoutDashboard className="h-5 w-5 shrink-0" />
                       <span className="whitespace-nowrap">Business Info</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="keywords"
+                      className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
+                    >
+                      <Hash className="h-5 w-5 shrink-0" />
+                      <span className="whitespace-nowrap">Keywords</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value="links"
@@ -1578,6 +1585,22 @@ export default function BusinessDetailPage() {
                     </div>
                   </CardContent>
                 </Card>
+              </TabsContent>
+              <TabsContent value="keywords" className="mt-5 space-y-6">
+                <KeywordsTab
+                  business={business}
+                  newKeyword={newKeyword}
+                  setNewKeyword={setNewKeyword}
+                  handleAddKeyword={handleAddKeyword}
+                  handleRemoveKeyword={handleRemoveKeyword}
+                  handleUpdateBusiness={handleUpdateBusiness}
+                  sendKeywordsToAPI={sendKeywordsToAPI}
+                  handleSaveChanges={handleSaveChanges}
+                  suggestedKeywords={suggestedKeywords}
+                  suggestionsLimit={suggestionsLimit}
+                  setSuggestionsLimit={setSuggestionsLimit}
+                  displayedSuggestions={displayedSuggestions}
+                />
               </TabsContent>
               <TabsContent value="links" className="mt-5 space-y-6">
             {qrCodeDataUrl && (
@@ -2113,24 +2136,6 @@ export default function BusinessDetailPage() {
             {business && (
               <RecommendedActionsTab businessName={business.name} />
             )}
-          </TabsContent>
-
-          {/* Keywords Tab */}
-          <TabsContent value="keywords" className="space-y-6 mt-0">
-            <KeywordsTab
-              business={business}
-              newKeyword={newKeyword}
-              setNewKeyword={setNewKeyword}
-              handleAddKeyword={handleAddKeyword}
-              handleRemoveKeyword={handleRemoveKeyword}
-              handleUpdateBusiness={handleUpdateBusiness}
-              sendKeywordsToAPI={sendKeywordsToAPI}
-              handleSaveChanges={handleSaveChanges}
-              suggestedKeywords={suggestedKeywords}
-              suggestionsLimit={suggestionsLimit}
-              setSuggestionsLimit={setSuggestionsLimit}
-              displayedSuggestions={displayedSuggestions}
-            />
           </TabsContent>
 
           {/* Reviews Tab */}
