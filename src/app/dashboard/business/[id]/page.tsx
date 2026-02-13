@@ -61,6 +61,7 @@ import {
   Lightbulb,
   Settings,
   Link2,
+  Sparkles,
 } from "lucide-react";
 
 const DEFAULT_TAB: (typeof BUSINESS_MAIN_TABS)[number] = "overview";
@@ -110,6 +111,8 @@ export default function BusinessDetailPage() {
   const [isLoadingReviews, setIsLoadingReviews] = useState(false);
   const [businessServiceInput, setBusinessServiceInput] = useState("");
   const [showBusinessServiceSuggestions, setShowBusinessServiceSuggestions] = useState(false);
+  const [aiServiceSuggestions, setAiServiceSuggestions] = useState<string[]>([]);
+  const [isLoadingAiSuggestions, setIsLoadingAiSuggestions] = useState(false);
 
   const suggestedCategories = useMemo(
     () => Object.keys(categorySuggestions) as BusinessCategory[],
@@ -157,10 +160,47 @@ export default function BusinessDetailPage() {
     router.replace(`${pathname}?${next.toString()}`, { scroll: false });
   };
 
-  const businessServiceSuggestions = useMemo(() => {
+  const staticServiceSuggestions = useMemo(() => {
     if (!business?.category) return [];
     return serviceSuggestions[business.category as BusinessCategory] || [];
   }, [business?.category]);
+
+  // Fetch AI service suggestions when category changes
+  useEffect(() => {
+    if (!business?.category) {
+      setAiServiceSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    setIsLoadingAiSuggestions(true);
+    setAiServiceSuggestions([]);
+
+    fetch("/api/ai/suggest-services", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: business.category }),
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("AI not available"))))
+      .then((data) => {
+        if (!cancelled && Array.isArray(data?.services) && data.services.length > 0) {
+          setAiServiceSuggestions(data.services);
+        }
+      })
+      .catch(() => {
+        // Silently fall back to static suggestions
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingAiSuggestions(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [business?.category]);
+
+  const businessServiceSuggestions = aiServiceSuggestions.length > 0
+    ? aiServiceSuggestions
+    : staticServiceSuggestions;
 
   // Close business service suggestions on outside tap/click
   useEffect(() => {
@@ -1316,9 +1356,23 @@ export default function BusinessDetailPage() {
                         </div>
                       </div>
 
-                      {/* Services section (matches onboarding) */}
+                      {/* Services section (AI-suggested or static) */}
                       <div className="grid gap-2">
-                        <Label htmlFor="business-services">Business Services</Label>
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="business-services">Business Services</Label>
+                          {isLoadingAiSuggestions && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              AI suggesting…
+                            </span>
+                          )}
+                          {!isLoadingAiSuggestions && aiServiceSuggestions.length > 0 && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Sparkles className="h-3.5 w-3.5 text-primary/70" />
+                              AI suggested
+                            </span>
+                          )}
+                        </div>
                         <div className="relative service-input-container">
                           <Input
                             id="business-services"

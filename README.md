@@ -14,6 +14,8 @@ This is a [Next.js](https://nextjs.org/) project bootstrapped with TypeScript, T
    - Create a `.env.local` file in the root directory:
      ```env
      NEXT_PUBLIC_GOOGLE_PLACES_API_KEY=your_google_places_api_key_here
+     # Optional: For AI-powered business service suggestions (Business Info tab)
+     OPENAI_API_KEY=your_openai_api_key_here
      ```
 
 ### Running the Development Server
