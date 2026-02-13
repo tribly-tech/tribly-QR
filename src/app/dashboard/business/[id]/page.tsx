@@ -1276,15 +1276,30 @@ export default function BusinessDetailPage() {
                               <div className="flex flex-wrap gap-2">
                                 {categorySuggestions[business.category as BusinessCategory]
                                   .slice(0, 5)
-                                  .map((suggestion) => (
-                                    <Badge
-                                      key={suggestion}
-                                      variant="secondary"
-                                      className="text-xs"
-                                    >
-                                      {suggestion}
-                                    </Badge>
-                                  ))}
+                                  .map((suggestion) => {
+                                    const currentServices = business.services || [];
+                                    const isSelected = currentServices.includes(suggestion);
+                                    return (
+                                      <Badge
+                                        key={suggestion}
+                                        variant={isSelected ? "default" : "secondary"}
+                                        className="text-xs cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+                                        onClick={() => {
+                                          if (isSelected) {
+                                            handleUpdateBusiness({
+                                              services: currentServices.filter((s) => s !== suggestion),
+                                            });
+                                          } else {
+                                            handleUpdateBusiness({
+                                              services: [...currentServices, suggestion],
+                                            });
+                                          }
+                                        }}
+                                      >
+                                        {suggestion}
+                                      </Badge>
+                                    );
+                                  })}
                               </div>
                             </div>
                           )}
@@ -1307,6 +1322,7 @@ export default function BusinessDetailPage() {
                         <div className="relative service-input-container">
                           <Input
                             id="business-services"
+                            autoComplete="off"
                             placeholder={
                               business.category
                                 ? `Add a service (e.g., ${

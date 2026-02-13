@@ -661,6 +661,7 @@ export default function LandingPage() {
                           onFocus={() => openSearchOverlay()}
                           onClick={() => openSearchOverlay()}
                           readOnly
+                          autoComplete="off"
                           className="flex-1 px-2 md:px-3 py-2 text-sm md:text-base text-[#1a1a1a] font-medium outline-none placeholder:text-[#9ca3af] bg-transparent min-w-0 cursor-pointer"
                           aria-autocomplete="list"
                           aria-expanded={
@@ -2409,6 +2410,7 @@ export default function LandingPage() {
                     setSearchValue(e.target.value);
                     setShowRecommendations(true);
                   }}
+                  autoComplete="off"
                   className="flex-1 px-3 py-2 text-base text-[#1a1a1a] font-medium outline-none placeholder:text-[#9ca3af] bg-transparent min-w-0"
                   aria-autocomplete="list"
                   aria-expanded={recommendations.length > 0}

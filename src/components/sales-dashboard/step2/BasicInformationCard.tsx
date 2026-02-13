@@ -219,6 +219,7 @@ export function BasicInformationCard({
             <div className="relative service-input-container">
               <Input
                 id="services"
+                autoComplete="off"
                 placeholder={
                   newBusiness.category
                     ? `Add a service (e.g., ${
