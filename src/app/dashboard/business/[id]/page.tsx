@@ -923,7 +923,7 @@ export default function BusinessDetailPage() {
               </div>
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  <h1 className="text-3xl font-bold">{business.name}</h1>
+                  <h1 className="text-3xl font-semibold">{business.name}</h1>
                   {getStatusBadge(business.status)}
                 </div>
                 <p className="text-xs font-medium text-muted-foreground">powered by tribly.ai</p>
@@ -1581,6 +1581,15 @@ export default function BusinessDetailPage() {
                           }
                         />
                       </div>
+                    </div>
+                    <div className="flex justify-end pt-4">
+                      <Button
+                        onClick={() => handleSaveChanges("Business information")}
+                        className="gap-2"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        Save Changes
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
