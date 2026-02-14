@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter, useParams, usePathname, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,11 @@ import { mockBusinesses, getReviewsByBusinessId } from "@/lib/mock-data";
 import { Business, BusinessCategory, ReviewCategory, Review } from "@/lib/types";
 import { generateShortUrlCode, generateReviewUrl, generateQRCodeDataUrl, downloadQRCodeAsPNG } from "@/lib/qr-utils";
 import { getBusinessBySlug } from "@/lib/business-slug";
+import {
+  getBusinessEditOverrides,
+  updateBusinessEditOverrides,
+  mergeBusinessWithOverrides,
+} from "@/lib/business-local-storage";
 import { getStoredUser, logout, setStoredUser, getAuthToken } from "@/lib/auth";
 import { BUSINESS_MAIN_TABS, BUSINESS_SETTINGS_SUB_TABS } from "@/lib/routes";
 import { categorySuggestions, serviceSuggestions } from "@/lib/category-suggestions";
@@ -113,6 +118,19 @@ export default function BusinessDetailPage() {
   const [showBusinessServiceSuggestions, setShowBusinessServiceSuggestions] = useState(false);
   const [aiServiceSuggestions, setAiServiceSuggestions] = useState<string[]>([]);
   const [isLoadingAiSuggestions, setIsLoadingAiSuggestions] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadRetryKey, setLoadRetryKey] = useState(0);
+  const [qrCodeError, setQrCodeError] = useState<string | null>(null);
+  const hasInitialLoadRef = useRef(false);
+
+  // Last-saved snapshots for change detection
+  const lastSavedRef = useRef<{
+    businessInfo: Record<string, unknown> | null;
+    links: Record<string, string> | null;
+    autoReply: { autoReplyEnabled: boolean } | null;
+    keywords: string[] | null;
+  }>({ businessInfo: null, links: null, autoReply: null, keywords: null });
 
   const suggestedCategories = useMemo(
     () => Object.keys(categorySuggestions) as BusinessCategory[],
@@ -227,6 +245,9 @@ export default function BusinessDetailPage() {
 
   useEffect(() => {
     const loadBusinessData = async () => {
+      setLoadError(null);
+      setIsLoading(true);
+
       // First, try to find business by slug (existing businesses)
       let businessData = getBusinessBySlug(businessSlug, mockBusinesses);
 
@@ -243,7 +264,8 @@ export default function BusinessDetailPage() {
           const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/scan?qr_id=${businessSlug}`);
 
           if (!response.ok) {
-            console.error("Failed to fetch business QR data");
+            const errData = await response.json().catch(() => ({}));
+            setLoadError(errData.message || "Failed to load business. Please check your connection and try again.");
             setIsLoading(false);
             return;
           }
@@ -278,8 +300,14 @@ export default function BusinessDetailPage() {
             reviewsInQueue: 0,
           };
 
-          setBusiness(mappedBusiness);
-          setWebsite(qrData.business_website || "");
+          // Merge with localStorage overrides (user may have saved when API didn't persist)
+          const qrOverrides = typeof window !== "undefined"
+            ? getBusinessEditOverrides(businessSlug)
+            : null;
+          const { business: mergedQrBusiness, website: mergedQrWebsite } =
+            mergeBusinessWithOverrides(mappedBusiness, qrOverrides, qrData.business_website || "");
+          setBusiness(mergedQrBusiness);
+          setWebsite(mergedQrWebsite || qrData.business_website || "");
           setReviewUrl(qrData.business_review_url || "");
 
           // Use business_qr_code_url from API if available, otherwise generate QR code
@@ -288,11 +316,14 @@ export default function BusinessDetailPage() {
             setBusiness((prev) => prev ? { ...prev, qrCodeUrl: qrData.business_qr_code_url } : null);
           } else if (qrData.business_review_url) {
             // Fallback: Generate QR code if review URL exists but no QR code URL provided
+            setQrCodeError(null);
             generateQRCodeDataUrl(qrData.business_review_url).then((dataUrl) => {
               setQrCodeDataUrl(dataUrl);
+              setQrCodeError(null);
               setBusiness((prev) => prev ? { ...prev, qrCodeUrl: dataUrl } : null);
             }).catch((error) => {
               console.error("Error generating QR code:", error);
+              setQrCodeError("Failed to generate QR code");
             });
           }
 
@@ -305,14 +336,19 @@ export default function BusinessDetailPage() {
           return;
         } catch (error) {
           console.error("Error fetching business QR data:", error);
+          setLoadError("Failed to load business. Please check your connection and try again.");
           setIsLoading(false);
           return;
         }
       }
 
-      // Existing business logic
+      // Existing business logic (mock businesses)
       if (businessData) {
-        setBusiness(businessData);
+        const overrides = getBusinessEditOverrides(businessData.id);
+        const { business: mergedBusiness, website: mergedWebsite } =
+          mergeBusinessWithOverrides(businessData, overrides);
+        setBusiness(mergedBusiness);
+        if (mergedWebsite) setWebsite(mergedWebsite);
 
         // Check if logged-in user is the business owner
         const user = getStoredUser();
@@ -327,12 +363,15 @@ export default function BusinessDetailPage() {
         setReviewUrl(url);
 
         // Generate QR code
+        setQrCodeError(null);
         generateQRCodeDataUrl(url).then((dataUrl) => {
           setQrCodeDataUrl(dataUrl);
+          setQrCodeError(null);
           // Update business with review URL and QR code
           setBusiness((prev) => prev ? { ...prev, reviewUrl: url, qrCodeUrl: dataUrl } : null);
         }).catch((error) => {
           console.error("Error generating QR code:", error);
+          setQrCodeError("Failed to generate QR code");
         });
       } else {
         // Business not found, redirect based on user role
@@ -348,7 +387,41 @@ export default function BusinessDetailPage() {
     };
 
     loadBusinessData();
-  }, [businessSlug, router]);
+  }, [businessSlug, router, loadRetryKey]);
+
+  // Mark initial load complete (skip autosave on first paint)
+  useEffect(() => {
+    if (business && !isLoading) {
+      hasInitialLoadRef.current = true;
+    }
+  }, [business?.id, isLoading]);
+
+  // Initialize last-saved snapshots when business loads (for change detection)
+  useEffect(() => {
+    if (business && !isLoading) {
+      lastSavedRef.current = {
+        businessInfo: {
+          name: business.name,
+          category: business.category,
+          email: business.email,
+          phone: business.phone || "",
+          address: business.address || "",
+          city: business.city || "",
+          area: business.area || "",
+          pincode: business.pincode || "",
+          overview: business.overview || "",
+          services: [...(business.services || [])].sort(),
+        },
+        links: {
+          googleBusinessReviewLink: business.googleBusinessReviewLink || "",
+          socialMediaLink: business.socialMediaLink || "",
+          website,
+        },
+        autoReply: { autoReplyEnabled: business.autoReplyEnabled },
+        keywords: [...(business.keywords || [])].sort(),
+      };
+    }
+  }, [business?.id, isLoading]); // Only init on load; website from closure is correct on first run
 
   // Reset suggestions limit when business or keywords change
   useEffect(() => {
@@ -464,6 +537,8 @@ export default function BusinessDetailPage() {
       if (!response.ok) {
         console.error("Failed to fetch manual reviews");
         setIsLoadingReviews(false);
+        setToastMessage("Could not load reviews. You can still use the page.");
+        setShowToast(true);
         return;
       }
 
@@ -495,6 +570,8 @@ export default function BusinessDetailPage() {
       setApiReviews(mappedReviews);
     } catch (error) {
       console.error("Error fetching manual reviews:", error);
+      setToastMessage("Could not load reviews. You can still use the page.");
+      setShowToast(true);
     } finally {
       setIsLoadingReviews(false);
     }
@@ -574,7 +651,8 @@ export default function BusinessDetailPage() {
       }
     } catch (error) {
       console.error("Error sending keywords to API:", error);
-      // Don't show error toast on every keyword add/remove to avoid spam
+      setToastMessage("Failed to save keywords. Please try again.");
+      setShowToast(true);
     }
   };
 
@@ -742,7 +820,81 @@ export default function BusinessDetailPage() {
     return suggestedKeywords.slice(0, suggestionsLimit);
   }, [suggestedKeywords, suggestionsLimit]);
 
-  const handleSaveChanges = async (section: string) => {
+  // Change detection for disabling Save buttons
+  const hasBusinessInfoChanges = useMemo(() => {
+    if (!business || !lastSavedRef.current.businessInfo) return false;
+    const s = lastSavedRef.current.businessInfo;
+    const cur = business;
+    if (s.name !== cur.name || s.category !== cur.category || s.email !== cur.email) return true;
+    if ((s.phone as string) !== (cur.phone || "")) return true;
+    if ((s.address as string) !== (cur.address || "")) return true;
+    if ((s.city as string) !== (cur.city || "")) return true;
+    if ((s.area as string) !== (cur.area || "")) return true;
+    if ((s.pincode as string) !== (cur.pincode || "")) return true;
+    if ((s.overview as string) !== (cur.overview || "")) return true;
+    const savedServices = (s.services as string[]) || [];
+    const curServices = cur.services || [];
+    if (savedServices.length !== curServices.length) return true;
+    const a = [...savedServices].sort();
+    const b = [...curServices].sort();
+    return a.some((v, i) => v !== b[i]);
+  }, [business]);
+
+  const hasLinksChanges = useMemo(() => {
+    if (!business || !lastSavedRef.current.links) return false;
+    const s = lastSavedRef.current.links;
+    return (
+      s.googleBusinessReviewLink !== (business.googleBusinessReviewLink || "") ||
+      s.socialMediaLink !== (business.socialMediaLink || "") ||
+      s.website !== website
+    );
+  }, [business, website]);
+
+  const hasAutoReplyChanges = useMemo(() => {
+    if (!business || !lastSavedRef.current.autoReply) return false;
+    return lastSavedRef.current.autoReply.autoReplyEnabled !== business.autoReplyEnabled;
+  }, [business]);
+
+  const hasKeywordsChanges = useMemo(() => {
+    if (!business || !lastSavedRef.current.keywords) return false;
+    const saved = lastSavedRef.current.keywords;
+    const cur = business.keywords || [];
+    if (saved.length !== cur.length) return true;
+    const a = [...saved].sort();
+    const b = [...cur].sort();
+    return a.some((v, i) => v !== b[i]);
+  }, [business]);
+
+  const updateLastSaved = (section: string) => {
+    if (!business) return;
+    const r = lastSavedRef.current;
+    if (section === "Business information") {
+      r.businessInfo = {
+        name: business.name,
+        category: business.category,
+        email: business.email,
+        phone: business.phone || "",
+        address: business.address || "",
+        city: business.city || "",
+        area: business.area || "",
+        pincode: business.pincode || "",
+        overview: business.overview || "",
+        services: [...(business.services || [])].sort(),
+      };
+    } else if (section === "Business links") {
+      r.links = {
+        googleBusinessReviewLink: business.googleBusinessReviewLink || "",
+        socialMediaLink: business.socialMediaLink || "",
+        website,
+      };
+    } else if (section === "Auto-reply settings") {
+      r.autoReply = { autoReplyEnabled: business.autoReplyEnabled };
+    } else if (section === "Keywords") {
+      r.keywords = [...(business.keywords || [])].sort();
+    }
+  };
+
+  const handleSaveChanges = async (section: string, isAutosave = false) => {
     if (!business) return;
 
     // If it's a QR ID, save via API
@@ -750,7 +902,7 @@ export default function BusinessDetailPage() {
       try {
         const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
 
-        // Prepare payload according to API specification
+        // Prepare payload according to API specification (autosave sends full payload)
         const payload: any = {
           name: business.name,
           description: business.overview || null,
@@ -758,28 +910,23 @@ export default function BusinessDetailPage() {
           email: business.email || null,
           phone: business.phone || null,
           category: business.category || null,
+          business_category: business.category || null, // Some APIs expect snake_case
           google_review_url: business.googleBusinessReviewLink || null,
           business_id: businessSlug,
+          tags: business.keywords || [],
+          services: business.services && business.services.length > 0 ? business.services : [],
         };
-
-        // Include tags (keywords) when saving keywords section
-        if (section === "Keywords") {
-          payload.tags = business.keywords || [];
-        }
-
-        // Include services when saving business information
-        if (section === "Business information" && business.services && business.services.length > 0) {
-          payload.services = business.services;
-        }
 
         // Only include address if address_line1 is provided (required field)
         if (business.address) {
+          const pincode = business.pincode || "";
           payload.address = {
             address_line1: business.address,
             address_line2: null,
             city: business.city || "",
             area: business.area || "",
-            pincode: business.pincode || "",
+            pincode,
+            postal_code: pincode, // Some APIs expect postal_code
           };
         }
 
@@ -805,18 +952,143 @@ export default function BusinessDetailPage() {
           throw new Error(errorData.message || "Failed to save business QR configuration");
         }
 
-        setToastMessage(`${section} saved successfully!`);
-        setShowToast(true);
+        if (!isAutosave) {
+          setToastMessage(`${section} saved successfully!`);
+          setShowToast(true);
+        }
+        updateLastSaved("Business information");
+        updateLastSaved("Business links");
+        updateLastSaved("Auto-reply settings");
+        updateLastSaved("Keywords");
+        // Persist to localStorage as fallback (in case API doesn't return persisted data)
+        if (section === "Business information" || isAutosave) {
+          updateBusinessEditOverrides(businessSlug, {
+            name: business.name,
+            category: business.category,
+            email: business.email,
+            phone: business.phone,
+            address: business.address,
+            city: business.city,
+            area: business.area,
+            pincode: business.pincode,
+            overview: business.overview,
+            services: business.services,
+          });
+        }
+        // Refetch to get latest from server (e.g. pincode persisted correctly)
+        try {
+          const refetchRes = await fetch(
+            `${apiBaseUrl}/dashboard/v1/business_qr/scan?qr_id=${businessSlug}`
+          );
+          if (refetchRes.ok) {
+            const refetchJson = await refetchRes.json();
+            const d = refetchJson.data;
+            if (d) {
+              setBusiness((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      name: d.business_name ?? prev.name,
+                      email: d.business_contact?.email ?? prev.email,
+                      phone: d.business_contact?.phone ?? prev.phone,
+                      address: d.business_address?.address_line1 ?? prev.address,
+                      city: d.business_address?.city ?? prev.city,
+                      area: d.business_address?.area ?? prev.area,
+                      pincode:
+                        d.business_address?.pincode ??
+                        d.business_address?.postal_code ??
+                        prev.pincode,
+                      overview: d.business_description ?? prev.overview,
+                      googleBusinessReviewLink:
+                        d.business_google_review_url ??
+                        prev.googleBusinessReviewLink,
+                      keywords: Array.isArray(d.business_tags)
+                        ? d.business_tags
+                        : prev.keywords,
+                      category:
+                        (d.business_category as BusinessCategory) || prev.category,
+                      // Only overwrite services if API returns a non-empty array (avoid losing just-saved data)
+                      services:
+                        Array.isArray(d.services) && d.services.length > 0
+                          ? d.services
+                          : prev.services,
+                    }
+                  : null
+              );
+              if (d.business_website !== undefined)
+                setWebsite(d.business_website || "");
+            }
+          }
+        } catch {
+          // Ignore refetch errors
+        }
       } catch (error) {
         console.error("Error saving business QR configuration:", error);
         setToastMessage(error instanceof Error ? error.message : "Failed to save changes");
         setShowToast(true);
       }
     } else {
-      setToastMessage(`${section} saved successfully!`);
-      setShowToast(true);
+      // Mock business: persist to localStorage so it survives refresh
+      const overrides: Parameters<typeof updateBusinessEditOverrides>[1] = {
+        name: business.name,
+        category: business.category,
+        email: business.email,
+        phone: business.phone,
+        address: business.address,
+        city: business.city,
+        area: business.area,
+        pincode: business.pincode,
+        overview: business.overview,
+        services: business.services,
+        googleBusinessReviewLink: business.googleBusinessReviewLink,
+        socialMediaLink: business.socialMediaLink,
+        website,
+        autoReplyEnabled: business.autoReplyEnabled,
+        keywords: business.keywords,
+      };
+      updateBusinessEditOverrides(business.id, overrides);
+      if (!isAutosave) {
+        setToastMessage(`${section} saved successfully!`);
+        setShowToast(true);
+      }
+      updateLastSaved("Business information");
+      updateLastSaved("Business links");
+      updateLastSaved("Auto-reply settings");
+      updateLastSaved("Keywords");
     }
   };
+
+  // Autosave: debounced save when business or website changes
+  useEffect(() => {
+    if (!business || isLoading || !hasInitialLoadRef.current) return;
+    const hasAnyChange =
+      hasBusinessInfoChanges ||
+      hasLinksChanges ||
+      hasAutoReplyChanges ||
+      hasKeywordsChanges;
+    if (!hasAnyChange) return;
+
+    const timer = setTimeout(async () => {
+      setIsSaving(true);
+      try {
+        await handleSaveChanges("Business information", true); // autosave sends full payload
+        setToastMessage("Changes saved");
+        setShowToast(true);
+      } finally {
+        setIsSaving(false);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleSaveChanges intentionally excluded
+  }, [
+    business,
+    website,
+    isLoading,
+    hasBusinessInfoChanges,
+    hasLinksChanges,
+    hasAutoReplyChanges,
+    hasKeywordsChanges,
+  ]);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -896,17 +1168,41 @@ export default function BusinessDetailPage() {
   }
 
   if (!business) {
+    const isQrUser = currentUser?.userType === "business_qr_user";
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex items-center justify-center">
-        <Card className="max-w-md">
+      <div className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
           <CardHeader>
-            <CardTitle>Business Not Found</CardTitle>
-            <CardDescription>The business you're looking for doesn't exist.</CardDescription>
+            <CardTitle>
+              {loadError ? "Failed to Load" : "Business Not Found"}
+            </CardTitle>
+            <CardDescription>
+              {loadError || "The business you're looking for doesn't exist."}
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            {currentUser?.userType !== "business_qr_user" && (
-              <Button onClick={() => router.push("/dashboard")}>Back to Dashboard</Button>
+          <CardContent className="flex flex-col gap-3">
+            {loadError && (
+              <Button
+                onClick={() => {
+                  setLoadError(null);
+                  setLoadRetryKey((k) => k + 1);
+                }}
+                className="w-full"
+              >
+                Try Again
+              </Button>
             )}
+            {!isQrUser && (
+              <Button variant="outline" onClick={() => router.push("/dashboard")}>
+                Back to Dashboard
+              </Button>
+            )}
+            <Button
+              variant={isQrUser && !loadError ? "default" : "ghost"}
+              onClick={() => router.push("/login")}
+            >
+              Go to Login
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -1205,6 +1501,7 @@ export default function BusinessDetailPage() {
                   </TabsList>
                 </div>
               </div>
+
               <TabsContent value="business-info" className="mt-5 space-y-6">
                 {/* Basic Information (matches onboarding BasicInformationCard) */}
                 <Card>
@@ -1247,8 +1544,13 @@ export default function BusinessDetailPage() {
                           onValueChange={(value) => {
                             handleUpdateBusiness({
                               category: value as BusinessCategory,
+                              services: [],
+                              keywords: [],
                             });
                             setBusinessServiceInput("");
+                            setSuggestionsLimit(12);
+                            setNewKeyword("");
+                            setShowBusinessServiceSuggestions(false);
                           }}
                         >
                           <SelectTrigger id="business-category">
@@ -1287,11 +1589,17 @@ export default function BusinessDetailPage() {
                                   key={cat}
                                   variant="outline"
                                   className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                                  onClick={() =>
+                                  onClick={() => {
                                     handleUpdateBusiness({
                                       category: cat,
-                                    })
-                                  }
+                                      services: [],
+                                      keywords: [],
+                                    });
+                                    setBusinessServiceInput("");
+                                    setSuggestionsLimit(12);
+                                    setNewKeyword("");
+                                    setShowBusinessServiceSuggestions(false);
+                                  }}
                                 >
                                   {cat
                                     .split("-")
@@ -1652,15 +1960,6 @@ export default function BusinessDetailPage() {
                         />
                       </div>
                     </div>
-                    <div className="flex justify-end pt-4">
-                      <Button
-                        onClick={() => handleSaveChanges("Business information")}
-                        className="gap-2"
-                      >
-                        <CheckCircle2 className="h-4 w-4" />
-                        Save Changes
-                      </Button>
-                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -1673,7 +1972,6 @@ export default function BusinessDetailPage() {
                   handleRemoveKeyword={handleRemoveKeyword}
                   handleUpdateBusiness={handleUpdateBusiness}
                   sendKeywordsToAPI={sendKeywordsToAPI}
-                  handleSaveChanges={handleSaveChanges}
                   suggestedKeywords={suggestedKeywords}
                   suggestionsLimit={suggestionsLimit}
                   setSuggestionsLimit={setSuggestionsLimit}
@@ -1681,7 +1979,7 @@ export default function BusinessDetailPage() {
                 />
               </TabsContent>
               <TabsContent value="links" className="mt-5 space-y-6">
-            {qrCodeDataUrl && (
+            {(qrCodeDataUrl || qrCodeError) && (
               <Card>
                 <CardHeader>
                   <CardTitle>QR Code</CardTitle>
@@ -1689,26 +1987,54 @@ export default function BusinessDetailPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-4">
-                    <div className="flex items-center justify-center p-8 border rounded-lg bg-white">
-                      <img
-                        src={qrCodeDataUrl}
-                        alt="QR Code"
-                        className="max-w-[200px] h-auto"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={handleDownloadQR}
-                        className="gap-2"
-                      >
-                        <Download className="h-4 w-4" />
-                        Download PNG
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground text-center">
-                      This QR code links to your unique review page. Scan it to leave a review.
-                    </p>
+                    {qrCodeError ? (
+                      <div className="flex flex-col items-center justify-center p-8 border rounded-lg bg-muted/30 gap-3">
+                        <AlertCircle className="h-10 w-10 text-destructive" />
+                        <p className="text-sm text-muted-foreground">{qrCodeError}</p>
+                        {reviewUrl && (
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setQrCodeError(null);
+                              generateQRCodeDataUrl(reviewUrl)
+                                .then((dataUrl) => {
+                                  setQrCodeDataUrl(dataUrl);
+                                  setQrCodeError(null);
+                                  setBusiness((prev) =>
+                                    prev ? { ...prev, qrCodeUrl: dataUrl } : null
+                                  );
+                                })
+                                .catch(() => setQrCodeError("Failed to generate QR code"));
+                            }}
+                          >
+                            Retry
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-center p-8 border rounded-lg bg-white">
+                          <img
+                            src={qrCodeDataUrl!}
+                            alt="QR Code"
+                            className="max-w-[200px] h-auto"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={handleDownloadQR}
+                            className="gap-2"
+                          >
+                            <Download className="h-4 w-4" />
+                            Download PNG
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground text-center">
+                          This QR code links to your unique review page. Scan it to leave a review.
+                        </p>
+                      </>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -1820,14 +2146,39 @@ export default function BusinessDetailPage() {
                     Optional: Add your social media profile link (Facebook, Instagram, Twitter, etc.)
                   </p>
                 </div>
-                <div className="flex justify-end">
-                  <Button
-                    onClick={() => handleSaveChanges("Business links")}
-                    className="gap-2"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Save Changes
-                  </Button>
+                <div className="space-y-2">
+                  <Label>Website</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={website}
+                      onChange={(e) => setWebsite(e.target.value)}
+                      placeholder="https://your-business.com"
+                      autoComplete="off"
+                    />
+                    {website && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => copyToClipboard(website)}
+                          title="Copy link"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => window.open(website, "_blank")}
+                          title="Open link"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Optional: Your business website URL
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -1904,23 +2255,14 @@ export default function BusinessDetailPage() {
 
                 <Separator />
 
-                <div className="flex justify-end">
-                  <Button
-                    onClick={() => handleSaveChanges("Auto-reply settings")}
-                    className="gap-2"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Save Changes
-                  </Button>
-                </div>
               </CardContent>
             </Card>
           </TabsContent>
               <TabsContent value="payment" className="mt-5 space-y-6">
-            {/* Plan Comparison */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Plan Comparison - horizontal scroll on mobile, grid on desktop */}
+            <div className="flex overflow-x-auto gap-6 pb-2 snap-x snap-mandatory -mx-3 px-3 lg:mx-0 lg:px-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:auto-rows-fr">
               {/* QR-Plus Plan */}
-              <Card className={`relative ${business.paymentPlan === "qr-plus" ? "ring-2 ring-primary" : ""}`}>
+              <Card className={`relative flex-shrink-0 w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] snap-center lg:w-auto lg:flex-shrink lg:min-w-0 ${business.paymentPlan === "qr-plus" ? "ring-2 ring-inset ring-primary" : ""}`}>
               <CardHeader>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
@@ -2041,7 +2383,7 @@ export default function BusinessDetailPage() {
               </Card>
 
               {/* QR-Basic Plan */}
-              <Card className={`relative ${business.paymentPlan === "qr-basic" ? "ring-2 ring-primary" : ""}`}>
+              <Card className={`relative flex-shrink-0 w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] snap-center lg:w-auto lg:flex-shrink lg:min-w-0 ${business.paymentPlan === "qr-basic" ? "ring-2 ring-inset ring-primary" : ""}`}>
                 <CardHeader>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">

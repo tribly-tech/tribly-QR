@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Hash, PlusIcon, XIcon, CheckCircle2 } from "lucide-react";
+import { Hash, PlusIcon, XIcon } from "lucide-react";
 import { Business } from "@/lib/types";
 import { Dispatch, SetStateAction } from "react";
 
@@ -15,7 +15,6 @@ interface KeywordsTabProps {
   handleRemoveKeyword: (keyword: string) => void;
   handleUpdateBusiness: (updates: Partial<Business>) => void;
   sendKeywordsToAPI: (keywords: string[]) => Promise<void>;
-  handleSaveChanges: (section: string) => void;
   suggestedKeywords: string[];
   suggestionsLimit: number;
   setSuggestionsLimit: Dispatch<SetStateAction<number>>;
@@ -30,7 +29,6 @@ export function KeywordsTab({
   handleRemoveKeyword,
   handleUpdateBusiness,
   sendKeywordsToAPI,
-  handleSaveChanges,
   suggestedKeywords,
   suggestionsLimit,
   setSuggestionsLimit,
@@ -151,14 +149,6 @@ export function KeywordsTab({
           )}
         </div>
 
-        <div className="pt-4 border-t">
-          <div className="flex justify-end">
-            <Button onClick={() => handleSaveChanges("Keywords")} className="gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              Save Keywords
-            </Button>
-          </div>
-        </div>
       </CardContent>
     </Card>
   );

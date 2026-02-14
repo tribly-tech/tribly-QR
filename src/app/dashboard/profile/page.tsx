@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -68,6 +68,11 @@ export default function ProfilePage() {
     email: "",
     phone: "",
   });
+  const [lastSavedProfileData, setLastSavedProfileData] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+  } | null>(null);
   const [salesTeam, setSalesTeam] = useState<SalesTeamMember[]>([]);
   const [isLoadingSalesTeam, setIsLoadingSalesTeam] = useState(false);
   const [salesTeamError, setSalesTeamError] = useState<string | null>(null);
@@ -193,11 +198,13 @@ export default function ProfilePage() {
       setUser(currentUser);
     }
 
-    setProfileData({
+    const initial = {
       name: currentUser.name,
       email: currentUser.email,
       phone: currentUser.phone || "",
-    });
+    };
+    setProfileData(initial);
+    setLastSavedProfileData(initial);
 
     // Fetch sales team for admin users
     const isUserAdmin = currentUser.role === "admin" || (!currentUser.role && currentUser.email === "admin@tribly.com");
@@ -205,6 +212,15 @@ export default function ProfilePage() {
       fetchSalesTeam();
     }
   }, [router, fetchSalesTeam]);
+
+  const hasProfileChanges = useMemo(() => {
+    if (!lastSavedProfileData) return false;
+    return (
+      profileData.name !== lastSavedProfileData.name ||
+      profileData.email !== lastSavedProfileData.email ||
+      profileData.phone !== lastSavedProfileData.phone
+    );
+  }, [profileData, lastSavedProfileData]);
 
   const handleSaveProfile = () => {
     if (user) {
@@ -216,6 +232,7 @@ export default function ProfilePage() {
       };
       setStoredUser(updatedUser);
       setUser(updatedUser);
+      setLastSavedProfileData({ ...profileData });
     }
   };
 
@@ -507,7 +524,11 @@ export default function ProfilePage() {
                       )}
                     </div>
                     <div className="flex justify-end pt-4">
-                      <Button onClick={handleSaveProfile} className="gap-2">
+                      <Button
+                        onClick={handleSaveProfile}
+                        className="gap-2"
+                        disabled={!hasProfileChanges}
+                      >
                         <Save className="h-4 w-4" />
                         Save Changes
                       </Button>
