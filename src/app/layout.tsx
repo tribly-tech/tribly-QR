@@ -6,7 +6,6 @@ export const metadata: Metadata = {
   description:
     "More stars. More visibility. More growth. Growth QR turns Google reviews into real revenue for your business",
   manifest: "/manifest.json",
-  themeColor: "#7C3AED",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -25,6 +24,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  themeColor: "#7C3AED",
 };
 
 import { LegacyCleanup } from "@/components/LegacyCleanup";
