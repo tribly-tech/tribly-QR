@@ -202,8 +202,8 @@ const PLATFORM_BUTTON_STYLES: Record<string, string> = {
     "bg-white text-[#FF0000] border border-[#FF0000]/40 hover:bg-white hover:border-[#FF0000] focus-visible:ring-[#FF0000]",
   facebook:
     "bg-white text-[#1877F2] border border-[#1877F2]/40 hover:bg-white hover:border-[#1877F2] focus-visible:ring-[#1877F2]",
-  linkedin:
-    "bg-white text-[#0A66C2] border border-[#0A66C2]/40 hover:bg-white hover:border-[#0A66C2] focus-visible:ring-[#0A66C2]",
+  whatsapp:
+    "bg-white text-[#25D366] border border-[#25D366]/40 hover:bg-white hover:border-[#25D366] focus-visible:ring-[#25D366]",
 };
 
 const formatDelta = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
@@ -501,28 +501,28 @@ const buildInitialSocialPlatforms = (businessName: string): SocialPlatformData[]
     ],
   },
   {
-    key: "linkedin",
-    name: "LinkedIn",
-    icon: <img src="/assets/linkedin-logo.png" alt="LinkedIn" className="h-5 w-5 object-contain" />,
+    key: "whatsapp",
+    name: "WhatsApp",
+    icon: <img src="/assets/whatsapp-logo.png" alt="WhatsApp" className="h-5 w-5 object-contain" />,
     status: "not_connected",
     lastSync: "Not synced yet",
     engagementGrowth: 0,
     miniChart: [2, 3, 2, 4, 3, 3, 2, 4],
     commonMetrics: [
-      { label: "Posts published", value: "0", delta: "0%" },
-      { label: "Engagement", value: "0", delta: "0%" },
-      { label: "Impressions", value: "0", delta: "0%" },
+      { label: "Messages sent", value: "0", delta: "0%" },
+      { label: "Conversations", value: "0", delta: "0%" },
       { label: "Reach", value: "0", delta: "0%" },
-      { label: "Followers", value: "0", delta: "0%" },
+      { label: "Replies", value: "0", delta: "0%" },
+      { label: "Contacts", value: "0", delta: "0%" },
     ],
     platformMetrics: [
-      { label: "Company views", value: "-", delta: "" },
-      { label: "Job clicks", value: "-", delta: "" },
-      { label: "Lead clicks", value: "-", delta: "" },
+      { label: "Clicks to chat", value: "-", delta: "" },
+      { label: "Response time", value: "-", delta: "" },
+      { label: "Business profile views", value: "-", delta: "" },
     ],
     highlights: [
-      "Connect to unlock B2B visibility and lead intent.",
-      "LinkedIn helps your team showcase credibility.",
+      "Connect to unlock chat and customer engagement metrics.",
+      "WhatsApp helps you reach customers where they are.",
     ],
   },
 ];
@@ -1161,7 +1161,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                 <CardHeader className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center overflow-hidden">
+                      <div className="flex shrink-0 items-center justify-center overflow-hidden [&_img]:h-8 [&_img]:w-8">
                         {platform.icon}
                       </div>
                       <div>
@@ -1282,7 +1282,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                 <CardHeader className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center">
+                      <div className="flex shrink-0 items-center justify-center overflow-hidden [&_img]:h-8 [&_img]:w-8">
                         {platform.icon}
                       </div>
                       <div>
@@ -1358,7 +1358,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                       </>
                     ) : (
                       <>
-                        <span className="mr-2 inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-sm bg-white/10">
+                        <span className="mr-2 inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-sm bg-white/10 [&_img]:h-4 [&_img]:w-4">
                           {platform.icon}
                         </span>
                         <span>Login with {platform.name}</span>

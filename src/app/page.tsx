@@ -16,7 +16,7 @@ export default function Home() {
       const isSalesTeam =
         user.role === "sales-team" || user.userType === "sales-team";
       if (isAdmin) {
-        router.replace("/dashboard");
+        router.replace("/dashboard/admin");
       } else if (isSalesTeam) {
         router.replace("/sales-dashboard");
       } else if (user.qrId) {

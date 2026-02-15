@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Toast } from "@/components/ui/toast";
+import { AddressAutocompleteInput } from "@/components/address-autocomplete";
 import { OverviewTab } from "@/components/dashboard/business/OverviewTab";
 import { KeywordsTab } from "@/components/dashboard/business/KeywordsTab";
 import { GBPHealthTab } from "@/components/dashboard/business/GBPHealthTab";
@@ -67,6 +68,9 @@ import {
   Settings,
   Link2,
   Sparkles,
+  ChevronDown,
+  Share2,
+  Receipt,
 } from "lucide-react";
 
 const DEFAULT_TAB: (typeof BUSINESS_MAIN_TABS)[number] = "overview";
@@ -110,6 +114,10 @@ export default function BusinessDetailPage() {
   const [paymentQRCode, setPaymentQRCode] = useState<string | null>(null);
   const [paymentTimer, setPaymentTimer] = useState(900); // 15 minutes in seconds
   const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
+  const [paymentSuccessAt, setPaymentSuccessAt] = useState<string | null>(null);
+  const [receiptAccordionOpen, setReceiptAccordionOpen] = useState(false);
+  const [receiptShareLoading, setReceiptShareLoading] = useState(false);
+  const [receiptShareSuccess, setReceiptShareSuccess] = useState(false);
   const [website, setWebsite] = useState<string>("");
   const [isQRId, setIsQRId] = useState(false);
   const [apiReviews, setApiReviews] = useState<Review[]>([]);
@@ -380,7 +388,7 @@ export default function BusinessDetailPage() {
           // Business owner trying to access non-existent business, redirect to login
           router.push("/login");
         } else {
-        router.push("/dashboard");
+        router.push("/dashboard/admin");
         }
       }
       setIsLoading(false);
@@ -455,6 +463,7 @@ export default function BusinessDetailPage() {
           // 90% success rate for demo
           if (Math.random() > 0.1) {
             setPaymentStatus("success");
+            setPaymentSuccessAt(new Date().toISOString());
             // Update business with new expiry date (1 year from now)
             const expiryDate = new Date();
             expiryDate.setFullYear(expiryDate.getFullYear() + 1);
@@ -509,6 +518,10 @@ export default function BusinessDetailPage() {
         setPaymentStatus("pending");
         setPaymentTimer(900);
         setPaymentSessionId(null);
+        setPaymentSuccessAt(null);
+        setReceiptAccordionOpen(false);
+        setReceiptShareLoading(false);
+        setReceiptShareSuccess(false);
       }, paymentStatus === "success" ? 2000 : 0);
     }
   }, [showPaymentDialog, paymentStatus]);
@@ -1193,7 +1206,7 @@ export default function BusinessDetailPage() {
               </Button>
             )}
             {!isQrUser && (
-              <Button variant="outline" onClick={() => router.push("/dashboard")}>
+              <Button variant="outline" onClick={() => router.push("/dashboard/admin")}>
                 Back to Dashboard
               </Button>
             )}
@@ -1244,7 +1257,7 @@ export default function BusinessDetailPage() {
           {!isBusinessOwner && currentUser?.userType !== "business_qr_user" && (
           <Button
             variant="ghost"
-            onClick={() => router.push("/dashboard")}
+            onClick={() => router.push("/dashboard/admin")}
             className="mb-4 gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -1288,7 +1301,7 @@ export default function BusinessDetailPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => router.push("/dashboard")}
+                    onClick={() => router.push("/dashboard/admin")}
                     className="h-9 w-9 rounded-full text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/60"
                     aria-label="Back to dashboard"
                   >
@@ -1912,16 +1925,24 @@ export default function BusinessDetailPage() {
                     <div className="grid gap-4">
                       <div className="grid gap-2">
                         <Label htmlFor="address">Street Address</Label>
-                        <Input
+                        <AddressAutocompleteInput
                           id="address"
-                          placeholder="123 Main Street, Building Name"
+                          placeholder="Search address (e.g., 123 Main Street, Mumbai)"
                           value={business.address || ""}
-                          onChange={(e) =>
-                            handleUpdateBusiness({ address: e.target.value })
+                          onChange={(value) =>
+                            handleUpdateBusiness({ address: value })
+                          }
+                          onAddressSelect={(components) =>
+                            handleUpdateBusiness({
+                              address: components.address,
+                              city: components.city,
+                              area: components.area,
+                              pincode: components.pincode,
+                            })
                           }
                         />
                         <p className="text-xs text-muted-foreground">
-                          Complete street address including building number and name
+                          Start typing to search and auto-fill address, city, area, and pincode from Google
                         </p>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
@@ -2729,19 +2750,20 @@ export default function BusinessDetailPage() {
 
       {/* Payment QR Dialog */}
       <Dialog open={showPaymentDialog} onOpenChange={(open) => {
-        if (paymentStatus === "success") {
-          // Auto-close after showing success for 2 seconds
-          setTimeout(() => setShowPaymentDialog(false), 2000);
-        } else if (paymentStatus === "pending") {
-          // Warn user before closing during pending payment
-          if (window.confirm("Payment is still pending. Are you sure you want to close?")) {
+        if (!open) {
+          if (paymentStatus === "pending") {
+            if (window.confirm("Payment is still pending. Are you sure you want to close?")) {
+              setShowPaymentDialog(false);
+            }
+          } else {
             setShowPaymentDialog(false);
           }
-        } else {
-          setShowPaymentDialog(false);
         }
       }}>
-        <DialogContent className="max-w-md">
+        <DialogContent
+          className="max-w-md"
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {paymentStatus === "success" ? (
@@ -2781,40 +2803,9 @@ export default function BusinessDetailPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 py-4">
-            {/* Plan Details */}
-            {business?.paymentPlan && (
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {business.paymentPlan === "qr-plus" ? (
-                      <>
-                        <Crown className="h-5 w-5 text-primary" />
-                        <span className="font-semibold">QR-Plus</span>
-                        <Badge variant="secondary" className="text-xs">Premium</Badge>
-                      </>
-                    ) : (
-                      <>
-                        <Shield className="h-5 w-5" />
-                        <span className="font-semibold">QR-Basic</span>
-                      </>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold">
-                      ₹{business.paymentPlan === "qr-plus" ? "6,999" : "2,999"}
-                    </div>
-                    <div className="text-xs text-muted-foreground">per year</div>
-                  </div>
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Business:</span>
-                  <span className="font-medium">{business.name}</span>
-                </div>
-              </div>
-            )}
-
+          <div
+            className={`space-y-6 py-4 ${paymentStatus === "success" && receiptAccordionOpen ? "max-h-[70vh] overflow-y-auto overflow-x-hidden" : ""}`}
+          >
             {/* Payment Status */}
             {paymentStatus === "pending" && (
               <>
@@ -2873,6 +2864,134 @@ export default function BusinessDetailPage() {
                         : "1 year from now"}
                     </span>
                   </div>
+                </div>
+
+                {/* Share receipt — accordion with receipt details + Share receipt button */}
+                <div className="rounded-xl border border-border bg-white shadow-sm overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setReceiptAccordionOpen((o) => !o)}
+                    className="flex w-full items-center justify-between gap-2 px-4 py-3.5 text-left transition-colors hover:bg-muted/40"
+                  >
+                    <span className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <Receipt className="h-4 w-4" />
+                      </span>
+                      Receipt details
+                    </span>
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${receiptAccordionOpen ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                  <div
+                    className={`grid transition-[grid-template-rows] duration-200 ease-out ${receiptAccordionOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="border-t border-border bg-stone-50/80 min-w-0">
+                        <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground pt-3 pb-1">
+                          Payment summary
+                        </div>
+                        <div className="divide-y divide-border/80">
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1 sm:gap-3 px-4 py-2.5 min-w-0">
+                            <span className="text-xs text-muted-foreground shrink-0">Business name</span>
+                            <span className="text-sm font-medium text-foreground sm:text-right break-all min-w-0">{business?.name ?? "—"}</span>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1 sm:gap-3 px-4 py-2.5 min-w-0">
+                            <span className="text-xs text-muted-foreground shrink-0">Business phone</span>
+                            <span className="text-sm font-medium text-foreground sm:text-right break-all min-w-0">{business?.phone ?? "—"}</span>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1 sm:gap-3 px-4 py-2.5 min-w-0">
+                            <span className="text-xs text-muted-foreground shrink-0">Business ID</span>
+                            <span className="text-sm font-medium font-mono text-foreground sm:text-right break-all min-w-0">{business?.id ?? business?.name ?? "—"}</span>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1 sm:gap-3 px-4 py-2.5 min-w-0">
+                            <span className="text-xs text-muted-foreground shrink-0">Transaction ID</span>
+                            <span className="text-sm font-medium font-mono text-foreground sm:text-right break-all min-w-0">
+                              {paymentSessionId ? `9Ex - ${paymentSessionId.split("-").pop() ?? paymentSessionId}` : "—"}
+                            </span>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1 sm:gap-3 px-4 py-2.5 min-w-0">
+                            <span className="text-xs text-muted-foreground shrink-0">Date & time</span>
+                            <span className="text-sm font-medium text-foreground sm:text-right break-all min-w-0">
+                              {paymentSuccessAt
+                                ? new Date(paymentSuccessAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+                                : "—"}
+                            </span>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1 sm:gap-3 px-4 py-2.5 min-w-0">
+                            <span className="text-xs text-muted-foreground shrink-0">Plan</span>
+                            <span className="text-sm font-medium text-foreground sm:text-right break-all min-w-0">
+                              {business?.paymentPlan === "qr-plus" ? "QR-Plus Premium" : "QR-Basic"}
+                            </span>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1 sm:gap-3 px-4 py-3 bg-primary/5 min-w-0">
+                            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground shrink-0">Invoice value</span>
+                            <span className="text-sm font-semibold text-foreground sm:text-right break-all min-w-0">
+                              ₹{business?.paymentPlan === "qr-plus" ? "6,999" : "2,999"}
+                              <span className="text-muted-foreground font-normal"> /year</span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground text-center">
+                    Share your receipt to activate your plan immediately.
+                  </p>
+                  {receiptShareSuccess ? (
+                    <div className="flex items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 py-3 px-4">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+                      <span className="text-sm font-medium text-emerald-800">Receipt sent to Tribly team</span>
+                    </div>
+                  ) : (
+                    <Button
+                      className="w-full gap-2"
+                      disabled={receiptShareLoading}
+                      onClick={() => {
+                        setReceiptShareLoading(true);
+                        const lines = [
+                          "Payment receipt",
+                          `Business name: ${business?.name ?? "—"}`,
+                          `Business phone number: ${business?.phone ?? "—"}`,
+                          `Business ID: ${business?.id ?? business?.name ?? "—"}`,
+                          `Transaction ID: ${paymentSessionId ? `9Ex - ${paymentSessionId.split("-").pop() ?? paymentSessionId}` : "—"}`,
+                          `Date & time: ${paymentSuccessAt ? new Date(paymentSuccessAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—"}`,
+                          `Plan name: ${business?.paymentPlan === "qr-plus" ? "QR-Plus Premium" : "QR-Basic"}`,
+                          `Invoice value: ₹${business?.paymentPlan === "qr-plus" ? "6,999" : "2,999"} per year`,
+                        ];
+                        const text = lines.join("\n");
+                        const onSuccess = () => {
+                          setReceiptShareLoading(false);
+                          setReceiptShareSuccess(true);
+                        };
+                        const onError = () => {
+                          setReceiptShareLoading(false);
+                          setToastMessage("Could not share receipt. Please try again.");
+                          setShowToast(true);
+                        };
+                        // Copy to clipboard only — no system share dialog. Tribly can collect receipt from backend or clipboard.
+                        if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+                          navigator.clipboard.writeText(text).then(onSuccess).catch(onError);
+                        } else {
+                          onError();
+                        }
+                      }}
+                    >
+                      {receiptShareLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Sending receipt...
+                        </>
+                      ) : (
+                        <>
+                          <Share2 className="h-4 w-4" />
+                          Share receipt with Tribly team
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
               </div>
             )}

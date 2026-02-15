@@ -6,8 +6,9 @@
 /** Base paths (no trailing slash) */
 export const PATHS = {
   dashboard: "/dashboard",
+  dashboardAdmin: "/dashboard/admin",
   dashboardBusiness: (idOrSlug: string) => `/dashboard/business/${idOrSlug}`,
-  dashboardProfile: "/dashboard/profile",
+  dashboardProfile: "/dashboard/admin/profile",
   salesDashboard: "/sales-dashboard",
   salesAnalysisReport: "/sales-dashboard/analysis-report",
   login: "/login",

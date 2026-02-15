@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AddressAutocompleteInput } from "@/components/address-autocomplete";
 import { NewBusinessState } from "../types";
 
 interface LocationInformationCardProps {
@@ -32,16 +33,25 @@ export function LocationInformationCard({
         <div className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="address">Street Address</Label>
-            <Input
+            <AddressAutocompleteInput
               id="address"
-              placeholder="123 Main Street, Building Name"
+              placeholder="Search address (e.g., 123 Main Street, Mumbai)"
               value={newBusiness.address}
-              onChange={(e) =>
-                setNewBusiness({ ...newBusiness, address: e.target.value })
+              onChange={(value) =>
+                setNewBusiness({ ...newBusiness, address: value })
+              }
+              onAddressSelect={(components) =>
+                setNewBusiness((prev) => ({
+                  ...prev,
+                  address: components.address,
+                  city: components.city,
+                  area: components.area,
+                  pincode: components.pincode,
+                }))
               }
             />
             <p className="text-xs text-muted-foreground">
-              Complete street address including building number and name
+              Start typing to search and auto-fill address, city, area, and pincode from Google
             </p>
           </div>
           <div className="grid grid-cols-2 gap-4">

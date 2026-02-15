@@ -21,9 +21,11 @@ const FIELDS = [
 ].join(",");
 
 export async function googlePlacesAutocomplete(
-  query: string
+  query: string,
+  options?: { types?: "establishment" | "address" | "geocode" }
 ): Promise<{ predictions: unknown[] }> {
   const apiKey = getGooglePlacesApiKey();
+  const types = options?.types ?? "establishment";
 
   if (!apiKey) {
     console.warn(
@@ -34,8 +36,9 @@ export async function googlePlacesAutocomplete(
     return { predictions: mockResults };
   }
 
+  const typesParam = types === "establishment" ? "&types=establishment" : `&types=${types}`;
   const response = await fetch(
-    `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}&types=establishment`
+    `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}${typesParam}`
   );
 
   if (!response.ok) {

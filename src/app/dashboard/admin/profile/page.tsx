@@ -1,15 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useRouter } from "next/navigation";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   getStoredUser,
   setStoredUser,
@@ -35,33 +34,28 @@ import {
   X,
   Edit,
   Loader2,
-  Eye,
-  EyeOff,
   AlertCircle,
   RefreshCw,
-  Lock,
-  Building2
+  Building2,
+  MapPin,
+  Briefcase
 } from "lucide-react";
 import { DialogClose } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-// API Sales Team Member type
+// API Sales Team Member type (aligned with add form: name, mobile, email, role, location)
 interface SalesTeamMember {
   id: string;
   name: string;
   email: string;
   phone?: string;
+  role?: string;
+  location?: string;
   createdAt?: string;
 }
 
-const PROFILE_TABS = ["personal", "sales-team"] as const;
-const DEFAULT_PROFILE_TAB = "personal";
-
 export default function ProfilePage() {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const [profileTab, setProfileTab] = useState(DEFAULT_PROFILE_TAB);
   const [user, setUser] = useState<User | null>(null);
   const [profileData, setProfileData] = useState({
     name: "",
@@ -85,34 +79,24 @@ export default function ProfilePage() {
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [newMember, setNewMember] = useState({
     name: "",
+    mobile: "",
     email: "",
+    role: "",
+    location: "",
     password: "",
   });
-  const [showPassword, setShowPassword] = useState(false);
   const [editingMember, setEditingMember] = useState({
     name: "",
     email: "",
     phone: "",
+    role: "",
+    location: "",
   });
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [locationFilter, setLocationFilter] = useState<string>("all");
 
   const isAdmin = !!user && (user.role === "admin" || user.userType === "admin" || (!user.role && (user.email === "admin@tribly.com" || user.email === "admin@tribly.ai")));
-
-  // Sync profile tab from URL
-  useEffect(() => {
-    const tab = searchParams.get("tab");
-    if (tab && PROFILE_TABS.includes(tab as (typeof PROFILE_TABS)[number])) {
-      if (tab === "sales-team" && !isAdmin) setProfileTab(DEFAULT_PROFILE_TAB);
-      else setProfileTab(tab as (typeof PROFILE_TABS)[number]);
-    }
-  }, [searchParams, isAdmin]);
-
-  const handleProfileTabChange = (value: string) => {
-    const next = new URLSearchParams(searchParams?.toString() ?? "");
-    next.set("tab", value);
-    const qs = next.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    setProfileTab(value as (typeof PROFILE_TABS)[number]);
-  };
 
   // Fetch sales team from API
   const fetchSalesTeam = useCallback(async () => {
@@ -147,12 +131,14 @@ export default function ProfilePage() {
         throw new Error(data.message || "Failed to fetch sales team");
       }
 
-      // Map API response to local format
+      // Map API response to local format (internal data points: name, mobile, email, role, location)
       const mappedTeam: SalesTeamMember[] = (data.data || []).map((member: any, index: number) => ({
         id: member.id || member._id || `member-${Date.now()}-${index}`,
         name: member.name || "",
         email: member.email || "",
-        phone: member.phone || "",
+        phone: member.phone || member.mobile || "",
+        role: member.role || "",
+        location: member.location || "",
         createdAt: member.created_at || member.createdAt || new Date().toISOString(),
       }));
 
@@ -164,6 +150,22 @@ export default function ProfilePage() {
       setIsLoadingSalesTeam(false);
     }
   }, []);
+
+  const uniqueLocations = useMemo(() => {
+    const set = new Set<string>();
+    salesTeam.forEach((m) => {
+      if (m.location?.trim()) set.add(m.location.trim());
+    });
+    return Array.from(set).sort();
+  }, [salesTeam]);
+
+  const filteredSalesTeam = useMemo(() => {
+    return salesTeam.filter((member) => {
+      if (roleFilter !== "all" && (member.role || "") !== roleFilter) return false;
+      if (locationFilter !== "all" && (member.location || "") !== locationFilter) return false;
+      return true;
+    });
+  }, [salesTeam, roleFilter, locationFilter]);
 
   useEffect(() => {
     const currentUser = getStoredUser();
@@ -237,8 +239,17 @@ export default function ProfilePage() {
   };
 
   const handleAddSalesTeamMember = async () => {
-    if (!newMember.name || !newMember.email || !newMember.password) {
+    if (!newMember.name.trim() || !newMember.email.trim()) {
       setAddMemberError("Please fill in all required fields");
+      return;
+    }
+
+    const mobileDigits = newMember.mobile.replace(/\D/g, "");
+    const last4FromMobile = mobileDigits.slice(-4);
+    const passwordToUse = newMember.password.trim() || last4FromMobile;
+
+    if (passwordToUse.length !== 4 || !/^\d{4}$/.test(passwordToUse)) {
+      setAddMemberError("Password must be 4 digits. Enter a 4-digit PIN or ensure mobile number has at least 4 digits.");
       return;
     }
 
@@ -257,31 +268,41 @@ export default function ProfilePage() {
         headers["Authorization"] = `Bearer ${authToken}`;
       }
 
+      const payload: Record<string, string> = {
+        name: newMember.name.trim(),
+        email: newMember.email.trim().toLowerCase(),
+        password: passwordToUse,
+      };
+      if (newMember.mobile.trim()) {
+        payload.phone = newMember.mobile.trim();
+        payload.mobile = newMember.mobile.trim();
+      }
+      if (newMember.role) payload.role = newMember.role;
+      if (newMember.location.trim()) payload.location = newMember.location.trim();
+
       const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/sales_team`, {
         method: "POST",
         headers,
-        body: JSON.stringify({
-          name: newMember.name.trim(),
-          email: newMember.email.trim().toLowerCase(),
-          password: newMember.password,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
 
       if (!response.ok || data.status !== "success") {
-        throw new Error(data.message || "Failed to add sales team member");
+        const message = data.message || "Failed to add member";
+        const details = data.errors ? (Array.isArray(data.errors) ? data.errors.join(", ") : JSON.stringify(data.errors)) : "";
+        setAddMemberError(details ? `${message}: ${details}` : message);
+        return;
       }
 
       // Refresh the sales team list
       await fetchSalesTeam();
 
       // Reset form and close dialog
-      setNewMember({ name: "", email: "", password: "" });
-      setShowPassword(false);
+      setNewMember({ name: "", mobile: "", email: "", role: "", location: "", password: "" });
+      setAddMemberError(null);
       setIsAddMemberOpen(false);
     } catch (error: any) {
-      console.error("Error adding sales team member:", error);
       setAddMemberError(error.message || "Failed to add member. Please try again.");
     } finally {
       setIsAddingMember(false);
@@ -300,6 +321,8 @@ export default function ProfilePage() {
       name: member.name,
       email: member.email,
       phone: member.phone || "",
+      role: member.role || "",
+      location: member.location || "",
     });
     setUpdateMemberError(null);
     setIsEditMemberOpen(true);
@@ -334,6 +357,8 @@ export default function ProfilePage() {
           name: editingMember.name.trim(),
           email: editingMember.email.trim().toLowerCase(),
           phone: editingMember.phone?.trim() || "",
+          role: editingMember.role?.trim() || undefined,
+          location: editingMember.location?.trim() || undefined,
         }),
       });
 
@@ -409,7 +434,7 @@ export default function ProfilePage() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => router.push("/dashboard")}
+              onClick={() => router.push("/dashboard/admin")}
               className="hover:bg-white/50"
             >
               <ArrowLeft className="h-5 w-5" />
@@ -434,122 +459,115 @@ export default function ProfilePage() {
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between mb-1">
-                <h2 className="text-2xl font-bold">{user.name}</h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-2xl font-bold">{user.name}</h2>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsEditProfileOpen(true)}
+                    className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                    aria-label="Edit profile"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                </div>
                 {getRoleBadge(user?.role)}
               </div>
               <p className="text-muted-foreground">{user.email}</p>
+              {user.phone && (
+                <p className="text-sm text-muted-foreground mt-0.5">{user.phone}</p>
+              )}
             </CardContent>
           </Card>
 
-          {/* Profile Information Card with Tabs */}
+          {/* Edit profile dialog */}
+          <Dialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Edit personal information</DialogTitle>
+                <DialogDescription>
+                  Update your name, email, and phone number
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-name">Full Name</Label>
+                  <div className="relative">
+                    <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="edit-name"
+                      value={profileData.name}
+                      onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
+                      className="pl-10"
+                      placeholder="Enter your full name"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-email">Email Address</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="edit-email"
+                      type="email"
+                      value={profileData.email}
+                      onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
+                      className="pl-10"
+                      placeholder="Enter your email"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-phone">Phone Number</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="edit-phone"
+                      type="tel"
+                      value={profileData.phone}
+                      onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                      className="pl-10"
+                      placeholder="+91 98765 43210"
+                    />
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsEditProfileOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    handleSaveProfile();
+                    setIsEditProfileOpen(false);
+                  }}
+                  disabled={!hasProfileChanges}
+                  className="gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  Save
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Sales Team (Admin Only) */}
+          {isAdmin && (
           <div>
             <Card>
-              <CardHeader>
-                <CardTitle>Profile Settings</CardTitle>
-                <CardDescription>
-                  Manage your personal information and sales team
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Tabs value={profileTab} onValueChange={handleProfileTabChange} className="w-full">
-                  <TabsList className={isAdmin ? "grid w-full grid-cols-2" : "w-full"}>
-                    <TabsTrigger value="personal" className="gap-2">
-                      <UserIcon className="h-4 w-4" />
-                      Personal Information
-                    </TabsTrigger>
-                    {isAdmin && (
-                      <TabsTrigger value="sales-team" className="gap-2">
-                        <Users className="h-4 w-4" />
-                        Sales Team
-                      </TabsTrigger>
-                    )}
-                  </TabsList>
-
-                  {/* Personal Information Tab */}
-                  <TabsContent value="personal" className="space-y-4 mt-6">
-                    <div className="grid gap-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="name">Full Name</Label>
-                        <div className="relative">
-                          <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            id="name"
-                            value={profileData.name}
-                            onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-                            className="pl-10"
-                            placeholder="Enter your full name"
-                          />
-                        </div>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="email">Email Address</Label>
-                        <div className="relative">
-                          <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            id="email"
-                            type="email"
-                            value={profileData.email}
-                            onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-                            className="pl-10"
-                            placeholder="Enter your email"
-                          />
-                        </div>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="phone">Phone Number</Label>
-                        <div className="relative">
-                          <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            id="phone"
-                            type="tel"
-                            value={profileData.phone}
-                            onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                            className="pl-10"
-                            placeholder="+91 98765 43210"
-                          />
-                        </div>
-                      </div>
-                      {user.createdAt && (
-                        <div className="grid gap-2">
-                          <Label>Member Since</Label>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Calendar className="h-4 w-4" />
-                            {new Date(user.createdAt).toLocaleDateString("en-US", {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex justify-end pt-4">
-                      <Button
-                        onClick={handleSaveProfile}
-                        className="gap-2"
-                        disabled={!hasProfileChanges}
-                      >
-                        <Save className="h-4 w-4" />
-                        Save Changes
-                      </Button>
-                    </div>
-                  </TabsContent>
-
-                  {/* Sales Team Tab (Admin Only) */}
-                  {isAdmin && (
-                    <TabsContent value="sales-team" className="space-y-4 mt-6">
+              <CardContent className="pt-6">
+                <div className="space-y-4">
                       <div className="flex items-center justify-between mb-4">
                         <div>
-                          <h3 className="text-lg font-semibold">Sales Team Management</h3>
+                          <h3 className="text-lg font-semibold">Team Management</h3>
                           <p className="text-sm text-muted-foreground">
-                            Manage your sales team members
+                            Manage your team members
                           </p>
                         </div>
                         <Dialog open={isAddMemberOpen} onOpenChange={(open) => {
                           setIsAddMemberOpen(open);
                           if (!open) {
-                            setNewMember({ name: "", email: "", password: "" });
-                            setShowPassword(false);
+                            setNewMember({ name: "", mobile: "", email: "", role: "", location: "", password: "" });
                             setAddMemberError(null);
                           }
                         }}>
@@ -561,9 +579,9 @@ export default function ProfilePage() {
                           </DialogTrigger>
                           <DialogContent>
                             <DialogHeader>
-                              <DialogTitle>Add Sales Team Member</DialogTitle>
+                              <DialogTitle>Add new team member</DialogTitle>
                               <DialogDescription>
-                                Add a new member to your sales team
+                                Add a new member to your team
                               </DialogDescription>
                             </DialogHeader>
                             <div className="grid gap-4 py-4">
@@ -574,7 +592,7 @@ export default function ProfilePage() {
                                 </div>
                               )}
                               <div className="grid gap-2">
-                                <Label htmlFor="member-name">Full Name *</Label>
+                                <Label htmlFor="member-name">Full name *</Label>
                                 <div className="relative">
                                   <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                   <Input
@@ -588,7 +606,51 @@ export default function ProfilePage() {
                                 </div>
                               </div>
                               <div className="grid gap-2">
-                                <Label htmlFor="member-email">Email Address *</Label>
+                                <Label htmlFor="member-mobile">Mobile number</Label>
+                                <div className="relative">
+                                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <Input
+                                    id="member-mobile"
+                                    type="tel"
+                                    value={newMember.mobile}
+                                    onChange={(e) => {
+                                      const mobile = e.target.value;
+                                      const digits = mobile.replace(/\D/g, "");
+                                      const last4 = digits.slice(-4);
+                                      setNewMember((prev) => ({
+                                        ...prev,
+                                        mobile,
+                                        password: last4.length === 4 ? last4 : prev.password,
+                                      }));
+                                    }}
+                                    placeholder="e.g. +91 98765 43210"
+                                    className="pl-10"
+                                    disabled={isAddingMember}
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid gap-2">
+                                <Label>Password (4 digits) *</Label>
+                                <div className="flex gap-2">
+                                  {[0, 1, 2, 3].map((i) => (
+                                    <Input
+                                      key={i}
+                                      type="text"
+                                      inputMode="numeric"
+                                      maxLength={1}
+                                      value={newMember.password[i] ?? ""}
+                                      readOnly
+                                      disabled={isAddingMember}
+                                      className="h-12 w-12 text-center text-lg font-semibold tabular-nums bg-muted/50"
+                                    />
+                                  ))}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  Fixed: last 4 digits of mobile number. Enter the mobile number above to set the password.
+                                </p>
+                              </div>
+                              <div className="grid gap-2">
+                                <Label htmlFor="member-email">Email ID *</Label>
                                 <div className="relative">
                                   <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                   <Input
@@ -603,34 +665,46 @@ export default function ProfilePage() {
                                 </div>
                               </div>
                               <div className="grid gap-2">
-                                <Label htmlFor="member-password">Password *</Label>
+                                <Label>Role</Label>
+                                <div className="flex flex-wrap gap-4 pt-1">
+                                  <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                      type="radio"
+                                      name="member-role"
+                                      value="Marketing/Sales executive"
+                                      checked={newMember.role === "Marketing/Sales executive"}
+                                      onChange={(e) => setNewMember({ ...newMember, role: e.target.value })}
+                                      disabled={isAddingMember}
+                                      className="h-4 w-4 border-input text-primary focus:ring-primary"
+                                    />
+                                    <span className="text-sm font-medium">Marketing/Sales executive</span>
+                                  </label>
+                                  <label className="flex items-center gap-2 cursor-not-allowed opacity-60">
+                                    <input
+                                      type="radio"
+                                      name="member-role"
+                                      value="Manager"
+                                      checked={newMember.role === "Manager"}
+                                      disabled
+                                      className="h-4 w-4 border-input text-primary focus:ring-primary"
+                                    />
+                                    <span className="text-sm font-medium">Manager (disabled)</span>
+                                  </label>
+                                </div>
+                              </div>
+                              <div className="grid gap-2">
+                                <Label htmlFor="member-location">Location</Label>
                                 <div className="relative">
-                                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                   <Input
-                                    id="member-password"
-                                    type={showPassword ? "text" : "password"}
-                                    value={newMember.password}
-                                    onChange={(e) => setNewMember({ ...newMember, password: e.target.value })}
-                                    placeholder="Enter password"
-                                    className="pl-10 pr-10"
+                                    id="member-location"
+                                    value={newMember.location}
+                                    onChange={(e) => setNewMember({ ...newMember, location: e.target.value })}
+                                    placeholder="Enter location"
+                                    className="pl-10"
                                     disabled={isAddingMember}
                                   />
-                                  <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                                    disabled={isAddingMember}
-                                  >
-                                    {showPassword ? (
-                                      <EyeOff className="h-4 w-4" />
-                                    ) : (
-                                      <Eye className="h-4 w-4" />
-                                    )}
-                                  </button>
                                 </div>
-                                <p className="text-xs text-muted-foreground">
-                                  The member will use this password to login
-                                </p>
                               </div>
                             </div>
                             <DialogFooter>
@@ -643,7 +717,7 @@ export default function ProfilePage() {
                               </Button>
                               <Button
                                 onClick={handleAddSalesTeamMember}
-                                disabled={!newMember.name || !newMember.email || !newMember.password || isAddingMember}
+                                disabled={!newMember.name.trim() || !newMember.email.trim() || (newMember.password.length !== 4 && newMember.mobile.replace(/\D/g, "").length < 4) || isAddingMember}
                               >
                                 {isAddingMember ? (
                                   <>
@@ -663,7 +737,7 @@ export default function ProfilePage() {
                         <Dialog open={isEditMemberOpen} onOpenChange={(open) => {
                           setIsEditMemberOpen(open);
                           if (!open) {
-                            setEditingMember({ name: "", email: "", phone: "" });
+                            setEditingMember({ name: "", email: "", phone: "", role: "", location: "" });
                             setEditingMemberId(null);
                             setUpdateMemberError(null);
                           }
@@ -712,7 +786,7 @@ export default function ProfilePage() {
                                 </div>
                               </div>
                               <div className="grid gap-2">
-                                <Label htmlFor="edit-member-phone">Phone Number</Label>
+                                <Label htmlFor="edit-member-phone">Mobile number</Label>
                                 <div className="relative">
                                   <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                   <Input
@@ -722,7 +796,49 @@ export default function ProfilePage() {
                                     onChange={(e) => setEditingMember({ ...editingMember, phone: e.target.value })}
                                     className="pl-10"
                                     disabled={isUpdatingMember}
-                                    placeholder="+91 98765 43210"
+                                    placeholder="e.g. +91 98765 43210"
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid gap-2">
+                                <Label>Role</Label>
+                                <div className="flex flex-wrap gap-4 pt-1">
+                                  <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                      type="radio"
+                                      name="edit-member-role"
+                                      value="Marketing/Sales executive"
+                                      checked={editingMember.role === "Marketing/Sales executive"}
+                                      onChange={(e) => setEditingMember({ ...editingMember, role: e.target.value })}
+                                      disabled={isUpdatingMember}
+                                      className="h-4 w-4 border-input text-primary focus:ring-primary"
+                                    />
+                                    <span className="text-sm font-medium">Marketing/Sales executive</span>
+                                  </label>
+                                  <label className="flex items-center gap-2 cursor-not-allowed opacity-60">
+                                    <input
+                                      type="radio"
+                                      name="edit-member-role"
+                                      value="Manager"
+                                      checked={editingMember.role === "Manager"}
+                                      disabled
+                                      className="h-4 w-4 border-input text-primary focus:ring-primary"
+                                    />
+                                    <span className="text-sm font-medium">Manager (disabled)</span>
+                                  </label>
+                                </div>
+                              </div>
+                              <div className="grid gap-2">
+                                <Label htmlFor="edit-member-location">Location</Label>
+                                <div className="relative">
+                                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <Input
+                                    id="edit-member-location"
+                                    value={editingMember.location}
+                                    onChange={(e) => setEditingMember({ ...editingMember, location: e.target.value })}
+                                    className="pl-10"
+                                    disabled={isUpdatingMember}
+                                    placeholder="Enter location"
                                   />
                                 </div>
                               </div>
@@ -781,23 +897,66 @@ export default function ProfilePage() {
                           <p className="text-sm mt-2">Click "Add Member" to get started</p>
                         </div>
                       ) : (
-                        <div className="rounded-md border">
+                        <>
+                          <div className="flex flex-wrap items-center gap-4 mb-4">
+                            <div className="flex items-center gap-2">
+                              <Label htmlFor="filter-role" className="text-sm whitespace-nowrap">Role</Label>
+                              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                                <SelectTrigger id="filter-role" className="w-[200px]">
+                                  <SelectValue placeholder="All roles" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All roles</SelectItem>
+                                  <SelectItem value="Marketing/Sales executive">Marketing/Sales executive</SelectItem>
+                                  <SelectItem value="Manager" disabled>Manager (disabled)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Label htmlFor="filter-location" className="text-sm whitespace-nowrap">Location</Label>
+                              <Select value={locationFilter} onValueChange={setLocationFilter}>
+                                <SelectTrigger id="filter-location" className="w-[200px]">
+                                  <SelectValue placeholder="All locations" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All locations</SelectItem>
+                                  {uniqueLocations.map((loc) => (
+                                    <SelectItem key={loc} value={loc}>
+                                      {loc}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <div className="rounded-md border">
                           <Table>
                             <TableHeader>
                               <TableRow>
                                 <TableHead>Name</TableHead>
+                                <TableHead>Mobile</TableHead>
                                 <TableHead>Email</TableHead>
-                                <TableHead>Phone</TableHead>
+                                <TableHead>Role</TableHead>
+                                <TableHead>Location</TableHead>
                                 <TableHead>Joined</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {salesTeam.map((member) => (
+                              {filteredSalesTeam.length === 0 ? (
+                                <TableRow>
+                                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                    No members match the selected filters.
+                                  </TableCell>
+                                </TableRow>
+                              ) : (
+                              filteredSalesTeam.map((member) => (
                                 <TableRow key={member.id}>
                                   <TableCell className="font-medium">{member.name}</TableCell>
-                                  <TableCell>{member.email}</TableCell>
                                   <TableCell>{member.phone || "-"}</TableCell>
+                                  <TableCell>{member.email}</TableCell>
+                                  <TableCell>{member.role || "-"}</TableCell>
+                                  <TableCell>{member.location || "-"}</TableCell>
                                   <TableCell>
                                     {member.createdAt
                                       ? new Date(member.createdAt).toLocaleDateString()
@@ -824,17 +983,18 @@ export default function ProfilePage() {
                                     </div>
                                   </TableCell>
                                 </TableRow>
-                              ))}
+                              ))
+                              )}
                             </TableBody>
                           </Table>
                         </div>
+                        </>
                       )}
-                    </TabsContent>
-                  )}
-                </Tabs>
+                </div>
               </CardContent>
             </Card>
           </div>
+          )}
         </div>
       </div>
     </div>

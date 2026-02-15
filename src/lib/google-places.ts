@@ -40,7 +40,7 @@ export interface PlaceSearchResult {
 
 export async function searchPlaces(query: string): Promise<GooglePlacePrediction[]> {
   try {
-    const response = await fetch(`/api/google-places/autocomplete?query=${encodeURIComponent(query)}`);
+    const response = await fetch(`/api/google-places/autocomplete?query=${encodeURIComponent(query)}&types=establishment`);
     if (!response.ok) {
       throw new Error('Failed to search places');
     }
@@ -51,6 +51,25 @@ export async function searchPlaces(query: string): Promise<GooglePlacePrediction
     // Fallback to mock data for testing
     const { getMockPredictions } = await import('./mock-places-data');
     return getMockPredictions(query);
+  }
+}
+
+/** Search addresses (street addresses) for address autocomplete; returns predictions with place_id for Place Details fetch */
+export async function searchAddresses(query: string): Promise<GooglePlacePrediction[]> {
+  try {
+    const response = await fetch(`/api/google-places/autocomplete?query=${encodeURIComponent(query)}&types=address`);
+    if (!response.ok) {
+      throw new Error('Failed to search addresses');
+    }
+    const data = await response.json();
+    return (data.predictions || []).map((p: { place_id: string; description: string; structured_formatting?: { main_text: string; secondary_text: string } }) => ({
+      place_id: p.place_id,
+      description: p.description,
+      structured_formatting: p.structured_formatting ?? { main_text: p.description?.split(',')[0] ?? '', secondary_text: p.description ?? '' },
+    }));
+  } catch (error) {
+    console.error('Error searching addresses:', error);
+    return [];
   }
 }
 

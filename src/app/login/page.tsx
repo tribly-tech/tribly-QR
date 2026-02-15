@@ -41,7 +41,7 @@ function LoginPageContent() {
       if (user.userType === "business_qr_user" && user.qrId) {
         router.push(`/dashboard/business/${user.qrId}`);
       } else if (user.userType === "admin") {
-        router.push("/dashboard");
+        router.push("/dashboard/admin");
       } else if (user.role === "business" && user.businessId) {
         const business = getBusinessById(user.businessId);
         if (business) {
@@ -51,7 +51,7 @@ function LoginPageContent() {
       } else if (user.role === "sales-team") {
         router.push("/sales-dashboard");
       } else {
-        router.push("/dashboard");
+        router.push("/dashboard/admin");
       }
     }
   }, [router, redirectUrl, qrId]);
@@ -137,12 +137,12 @@ function LoginPageContent() {
       } else if (userData.user_type === "business_qr_user" && userData.qr_id) {
         router.push(`/dashboard/business/${userData.qr_id}`);
       } else if (userData.user_type === "admin") {
-        router.push("/dashboard");
+        router.push("/dashboard/admin");
       } else if (userData.qr_id) {
         // Fallback: if qr_id exists, redirect to business dashboard
         router.push(`/dashboard/business/${userData.qr_id}`);
       } else {
-        router.push("/dashboard");
+        router.push("/dashboard/admin");
       }
     } catch (err) {
       console.error("Login error:", err);

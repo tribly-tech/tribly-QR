@@ -137,7 +137,7 @@ function SalesDashboardContent() {
     }
 
     if (currentUser.role === "admin") {
-      router.push("/dashboard");
+      router.push("/dashboard/admin");
       return;
     }
 
@@ -160,7 +160,7 @@ function SalesDashboardContent() {
 
       if (role === "admin") {
         setStoredUser(updatedUser);
-        router.push("/dashboard");
+        router.push("/dashboard/admin");
         return;
       }
 
@@ -287,6 +287,7 @@ function SalesDashboardContent() {
             address: prefillData.address || prev.address,
             city: prefillData.city || prev.city,
             area: prefillData.area || prev.area,
+            pincode: prefillData.pincode || prev.pincode,
             category: prefillData.category || prev.category,
             overview: prefillData.overview || prev.overview,
             googleBusinessReviewLink:

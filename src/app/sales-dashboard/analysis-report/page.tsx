@@ -412,14 +412,15 @@ This secure link will allow Tribly to help improve your online presence.`;
     window.open(whatsappUrl, "_blank");
   };
 
-  // Extract address component by type
+  // Extract address component by type (supports longText from API and long_name from Google)
   const getAddressComponent = (types: string[]): string => {
     if (!placeDetails?.address_components) return "";
     for (const type of types) {
       const component = placeDetails.address_components.find((c) =>
         c.types?.includes(type)
       );
-      if (component?.longText) return component.longText;
+      const value = component?.longText ?? (component as { long_name?: string })?.long_name;
+      if (value) return value;
     }
     return "";
   };
@@ -505,6 +506,7 @@ This secure link will allow Tribly to help improve your online presence.`;
         "sublocality",
         "neighborhood",
       ]) || "";
+    const pincode = getAddressComponent(["postal_code"]) || "";
 
     // Map place types to category
     const category = mapTypesToCategory(placeDetails?.types);
@@ -548,6 +550,7 @@ This secure link will allow Tribly to help improve your online presence.`;
         address,
         city,
         area,
+        pincode,
         category,
         overview,
         googleBusinessReviewLink,
