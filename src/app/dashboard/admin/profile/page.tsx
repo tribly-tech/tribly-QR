@@ -372,7 +372,7 @@ export default function ProfilePage() {
       await fetchSalesTeam();
 
       // Reset form and close dialog
-      setEditingMember({ name: "", email: "", phone: "" });
+      setEditingMember({ name: "", email: "", phone: "", role: "", location: "" });
       setEditingMemberId(null);
       setIsEditMemberOpen(false);
     } catch (error: any) {
