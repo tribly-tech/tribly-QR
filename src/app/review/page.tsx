@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { getStoredUser } from "@/lib/auth";
+import { QrCode } from "lucide-react";
 
 function ReviewPageContent() {
   const router = useRouter();
@@ -14,7 +15,10 @@ function ReviewPageContent() {
 
   useEffect(() => {
     const checkQRConfiguration = async () => {
-      if (!qrId) return;
+      if (!qrId) {
+        setIsChecking(false);
+        return;
+      }
 
       setIsChecking(true);
 
@@ -73,6 +77,36 @@ function ReviewPageContent() {
       router.push(manualFeedbackUrl);
     }
   };
+
+  // No QR: show scan prompt instead of rating options (avoids dead flow from rating without QR)
+  if (!qrId) {
+    return (
+      <main className="h-screen sm:min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex flex-col items-center justify-center p-4 sm:p-6 overflow-hidden">
+        <div className="w-full max-w-md space-y-6 text-center">
+          <div className="flex justify-center">
+            <div className="rounded-2xl bg-white/80 border border-[#9747FF]/20 p-8">
+              <QrCode className="w-24 h-24 text-[#9747FF]" strokeWidth={1.5} />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl sm:text-3xl font-semibold text-foreground">
+              Scan to share feedback
+            </h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
+              Use the QR code at the business to leave your feedback.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => router.push("/")}
+            className="text-[#9747FF] border-[#9747FF]/30 hover:bg-[#9747FF]/10"
+          >
+            Back to Home
+          </Button>
+        </div>
+      </main>
+    );
+  }
 
   // Show loading state while checking QR configuration
   if (isChecking) {

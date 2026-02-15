@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getBusinessById } from "@/lib/mock-data";
+import { QrCode } from "lucide-react";
 
 function ManualFeedbackPageContent() {
   const router = useRouter();
@@ -20,6 +21,36 @@ function ManualFeedbackPageContent() {
   const ratingParam = searchParams.get("rating");
   const qrId = searchParams.get("qr");
   const rating = ratingParam === "excellent" ? "Excellent" : ratingParam === "good" ? "Good" : ratingParam === "average" ? "Average" : null;
+
+  // No QR: show QR required message and Back to review so user can leave
+  if (!qrId) {
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex flex-col items-center justify-center p-4 sm:p-6">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6 pb-6 space-y-6 text-center">
+            <div className="flex justify-center">
+              <div className="rounded-2xl bg-white/80 border border-[#9747FF]/20 p-6">
+                <QrCode className="w-16 h-16 text-[#9747FF]" strokeWidth={1.5} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-xl font-semibold text-foreground">QR code required</h1>
+              <p className="text-sm text-muted-foreground">
+                To share feedback, please scan the QR code at the business. This links your response to the right place.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => router.push("/review")}
+              className="w-full text-[#9747FF] border-[#9747FF]/30 hover:bg-[#9747FF]/10"
+            >
+              Back
+            </Button>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();

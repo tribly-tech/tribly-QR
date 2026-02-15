@@ -324,7 +324,10 @@ function FeedbackPageContent() {
             <CardTitle>Invalid Rating</CardTitle>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => router.push("/review")} className="w-full">
+            <Button
+              onClick={() => router.push(qrId ? `/review?qr=${qrId}` : "/review")}
+              className="w-full"
+            >
               Go Back
             </Button>
           </CardContent>
