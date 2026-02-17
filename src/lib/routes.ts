@@ -34,7 +34,6 @@ export const BUSINESS_SETTINGS_SUB_TABS = [
   "keywords",
   "links",
   "auto-reply",
-  "payment",
 ] as const;
 export type BusinessSettingsSubTab = (typeof BUSINESS_SETTINGS_SUB_TABS)[number];
 

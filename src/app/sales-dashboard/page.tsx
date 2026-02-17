@@ -31,7 +31,6 @@ import {
   PaymentCard,
   SubmitButtonCard,
   NewBusinessState,
-  PaymentStatus,
   calculateGBPScore,
   generateMockBusinessData,
   PlaceDetailsData,
@@ -117,10 +116,8 @@ function SalesDashboardContent() {
 
   // Payment state
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("pending");
   const [paymentQRCode, setPaymentQRCode] = useState<string | null>(null);
   const [paymentTimer, setPaymentTimer] = useState(900);
-  const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
 
   // Onboarding state
   const [isOnboarding, setIsOnboarding] = useState(false);
@@ -442,43 +439,13 @@ function SalesDashboardContent() {
 
   // Payment timer countdown
   useEffect(() => {
-    if (showPaymentDialog && paymentStatus === "pending" && paymentTimer > 0) {
+    if (showPaymentDialog && paymentTimer > 0) {
       const interval = setInterval(() => {
-        setPaymentTimer((prev) => {
-          if (prev <= 1) {
-            setPaymentStatus("expired");
-            return 0;
-          }
-          return prev - 1;
-        });
+        setPaymentTimer((prev) => (prev <= 1 ? 0 : prev - 1));
       }, 1000);
       return () => clearInterval(interval);
     }
-  }, [showPaymentDialog, paymentStatus, paymentTimer]);
-
-  // Simulate payment verification
-  useEffect(() => {
-    if (showPaymentDialog && paymentStatus === "pending" && paymentSessionId) {
-      const checkPayment = async () => {
-        const delay = Math.random() * 5000 + 5000;
-        setTimeout(() => {
-          if (Math.random() > 0.1) {
-            setPaymentStatus("success");
-            const expiryDate = new Date();
-            expiryDate.setFullYear(expiryDate.getFullYear() + 1);
-            setNewBusiness((prev) => ({
-              ...prev,
-              paymentExpiryDate: expiryDate.toISOString(),
-              paymentStatus: "active",
-            }));
-          } else {
-            setPaymentStatus("failed");
-          }
-        }, delay);
-      };
-      checkPayment();
-    }
-  }, [showPaymentDialog, paymentStatus, paymentSessionId]);
+  }, [showPaymentDialog, paymentTimer]);
 
   // Generate payment QR code
   useEffect(() => {
@@ -490,8 +457,6 @@ function SalesDashboardContent() {
           const planName =
             newBusiness.paymentPlan === "qr-plus" ? "QR-Plus" : "QR-Basic";
           const businessNameForQR = newBusiness.name || "New Business";
-          const sessionId = `payment-${Date.now()}`;
-          setPaymentSessionId(sessionId);
 
           const paymentUrl = `upi://pay?pa=tribly@pay&pn=Tribly%20QR&am=${planPrice}&cu=INR&tn=${planName}%20Subscription%20-%20${encodeURIComponent(
             businessNameForQR
@@ -499,11 +464,9 @@ function SalesDashboardContent() {
 
           const qrCode = await generateQRCodeDataUrl(paymentUrl);
           setPaymentQRCode(qrCode);
-          setPaymentStatus("pending");
           setPaymentTimer(900);
         } catch (error) {
           console.error("Error generating payment QR code:", error);
-          setPaymentStatus("failed");
         }
       };
       generatePaymentQR();
@@ -518,28 +481,28 @@ function SalesDashboardContent() {
   // Reset payment state when dialog closes
   useEffect(() => {
     if (!showPaymentDialog) {
-      setTimeout(
-        () => {
-          setPaymentQRCode(null);
-          setPaymentStatus("pending");
-          setPaymentTimer(900);
-          setPaymentSessionId(null);
-        },
-        paymentStatus === "success" ? 2000 : 0
-      );
+      setTimeout(() => {
+        setPaymentQRCode(null);
+        setPaymentTimer(900);
+      }, 0);
     }
-  }, [showPaymentDialog, paymentStatus]);
+  }, [showPaymentDialog]);
 
   const handleCompletePayment = () => {
     if (!newBusiness.paymentPlan) return;
     setShowPaymentDialog(true);
   };
 
-  const handlePaymentRetry = () => {
-    setPaymentStatus("pending");
-    setPaymentQRCode(null);
-    setPaymentTimer(900);
-    setPaymentSessionId(null);
+  const handleMarkPaymentCompleted = () => {
+    if (!newBusiness.paymentPlan) return;
+    const expiryDate = new Date();
+    expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+    setNewBusiness((prev) => ({
+      ...prev,
+      paymentExpiryDate: expiryDate.toISOString(),
+      paymentStatus: "active",
+    }));
+    setShowPaymentDialog(false);
   };
 
   const handleOnboardBusiness = async () => {
@@ -799,10 +762,9 @@ function SalesDashboardContent() {
         open={showPaymentDialog}
         onOpenChange={setShowPaymentDialog}
         newBusiness={newBusiness}
-        paymentStatus={paymentStatus}
         paymentQRCode={paymentQRCode}
         paymentTimer={paymentTimer}
-        onRetry={handlePaymentRetry}
+        onMarkCompleted={handleMarkPaymentCompleted}
       />
     </div>
   );

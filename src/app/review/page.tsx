@@ -81,7 +81,7 @@ function ReviewPageContent() {
   // No QR: show scan prompt instead of rating options (avoids dead flow from rating without QR)
   if (!qrId) {
     return (
-      <main className="h-screen sm:min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex flex-col items-center justify-center p-4 sm:p-6 overflow-hidden">
+      <main className="h-screen sm:min-h-screen bg-gradient-to-br from-[#FDF2FF] via-[#E9F4FF] to-[#FFF9E6] flex flex-col items-center justify-center p-4 sm:p-6 overflow-hidden">
         <div className="w-full max-w-md space-y-6 text-center">
           <div className="flex justify-center">
             <div className="rounded-2xl bg-white/80 border border-[#9747FF]/20 p-8">
@@ -111,7 +111,7 @@ function ReviewPageContent() {
   // Show loading state while checking QR configuration
   if (isChecking) {
     return (
-      <main className="h-screen sm:min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex flex-col items-center justify-center p-4 sm:p-6 overflow-hidden">
+      <main className="h-screen sm:min-h-screen bg-gradient-to-br from-[#FDF2FF] via-[#E9F4FF] to-[#FFF9E6] flex flex-col items-center justify-center p-4 sm:p-6 overflow-hidden">
         <div className="text-center">
           <p className="text-muted-foreground">Loading...</p>
         </div>
@@ -120,7 +120,7 @@ function ReviewPageContent() {
   }
 
   return (
-    <main className="h-screen sm:min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex flex-col items-center justify-center p-4 sm:p-6 overflow-hidden">
+    <main className="h-screen sm:min-h-screen bg-gradient-to-br from-[#FDF2FF] via-[#E9F4FF] to-[#FFF9E6] flex flex-col items-center justify-center p-4 sm:p-6 overflow-hidden">
       <div className="w-full max-w-md space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
@@ -190,7 +190,7 @@ function ReviewPageContent() {
 export default function ReviewPage() {
   return (
     <Suspense fallback={
-      <main className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex items-center justify-center p-4">
+      <main className="min-h-screen bg-gradient-to-br from-[#FDF2FF] via-[#E9F4FF] to-[#FFF9E6] flex items-center justify-center p-4">
         <div className="text-center">
           <p className="text-muted-foreground">Loading...</p>
         </div>

@@ -595,6 +595,7 @@ This secure link will allow Tribly to help improve your online presence.`;
             gbpAnalysisData={gbpAnalysisData}
             top3Result={top3Result}
             top3Loading={top3Loading}
+            hideDiscoverySection
           />
 
           {/* Recommended Actions */}
@@ -710,18 +711,18 @@ This secure link will allow Tribly to help improve your online presence.`;
               <CardContent className="relative z-10">
                 <div className="space-y-6">
                   {/* Top 5 Ranking - Critical Statistic */}
-                  <div className="relative p-4 sm:p-6 bg-gradient-to-br from-orange-50/90 via-amber-50/90 to-yellow-50/90 rounded-2xl border border-orange-200/60">
+                  <div className="relative p-4 sm:p-6 bg-gradient-to-br from-indigo-50/90 via-sky-50/90 to-purple-50/90 rounded-2xl border border-indigo-200/60">
                     {/* Decorative elements */}
-                    <div className="absolute top-2 right-2 w-20 h-20 bg-orange-200/15 rounded-full blur-2xl"></div>
-                    <div className="absolute bottom-2 left-2 w-16 h-16 bg-amber-200/15 rounded-full blur-2xl"></div>
+                    <div className="absolute top-2 right-2 w-20 h-20 bg-indigo-200/20 rounded-full blur-2xl"></div>
+                    <div className="absolute bottom-2 left-2 w-16 h-16 bg-sky-200/20 rounded-full blur-2xl"></div>
 
                     <div className="relative z-10">
                       <div className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6">
                         {/* Left: Statistic */}
                         <div className="flex-1 w-full">
                           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
-                            <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-orange-100 to-amber-100 border border-orange-200/50 flex-shrink-0">
-                              <Target className="h-5 w-5 sm:h-6 sm:w-6 text-orange-600" />
+                            <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-indigo-100 to-sky-100 border border-indigo-200/50 flex-shrink-0">
+                              <Target className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <h3 className="text-lg sm:text-xl font-semibold text-gray-900 leading-tight">
@@ -736,7 +737,7 @@ This secure link will allow Tribly to help improve your online presence.`;
                           {/* Current Rank vs Target - Card Design */}
                           <div className="flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-3 sm:gap-4 mt-4 sm:mt-5">
                             {/* Current Position Card */}
-                            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-3 sm:p-5 border border-green-200/60 min-w-[120px] sm:min-w-[140px]">
+                            <div className="bg-white rounded-xl p-3 sm:p-5 border border-white min-w-[120px] sm:min-w-[140px]">
                               <div className="text-center">
                                 <div
                                   className={`text-2xl sm:text-3xl lg:text-4xl mb-1.5 ${
@@ -773,7 +774,7 @@ This secure link will allow Tribly to help improve your online presence.`;
                             </div>
 
                             {/* Target Card */}
-                            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-3 sm:p-5 border border-green-200/60 min-w-[120px] sm:min-w-[140px]">
+                            <div className="bg-white rounded-xl p-3 sm:p-5 border border-white min-w-[120px] sm:min-w-[140px]">
                               <div className="text-center">
                                 <div className="text-2xl sm:text-3xl lg:text-4xl text-green-700 mb-1.5">
                                   Top 5
@@ -801,9 +802,9 @@ This secure link will allow Tribly to help improve your online presence.`;
 
                         {/* Right: Visual Impact */}
                         <div className="flex-shrink-0 w-full sm:w-auto">
-                          <div className="bg-gradient-to-br from-white to-orange-50/30 rounded-xl p-4 sm:p-5 border border-orange-200/50">
+                          <div className="bg-gradient-to-br from-white to-indigo-50/40 rounded-xl p-4 sm:p-5 border border-indigo-200/60">
                             <div className="text-center">
-                              <div className="text-3xl sm:text-4xl text-orange-600 mb-1.5">
+                              <div className="text-3xl sm:text-4xl text-indigo-600 mb-1.5">
                                 95%
                               </div>
                               <div className="text-xs text-gray-700 uppercase tracking-wide">
@@ -816,7 +817,7 @@ This secure link will allow Tribly to help improve your online presence.`;
                             <div className="mt-4 sm:mt-5 pt-3 sm:pt-4 border-t border-gray-200/60">
                               <div className="flex items-center justify-between text-xs mb-1.5">
                                 <span className="text-gray-600">Top 5</span>
-                                <span className="text-orange-600">95%</span>
+                                <span className="text-indigo-600">95%</span>
                               </div>
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-600">Others</span>
@@ -828,9 +829,9 @@ This secure link will allow Tribly to help improve your online presence.`;
                       </div>
 
                       {/* Call to Action */}
-                      <div className="mt-6 pt-5 border-t border-orange-200/50">
+                      <div className="mt-6 pt-5 border-t border-indigo-200/50">
                         <div className="flex items-start gap-3">
-                          <Lightbulb className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                          <Lightbulb className="h-5 w-5 text-indigo-600 flex-shrink-0 mt-0.5" />
                           <p className="text-sm text-gray-700 leading-relaxed">
                             <span className="text-gray-900">
                               Connect your Google Business Profile

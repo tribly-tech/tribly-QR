@@ -89,6 +89,14 @@ const MOBILE_MAIN_TAB_ITEMS: Array<{
   { value: "settings", label: "Settings", shortLabel: "Settings", icon: Settings },
 ];
 
+const REVIEW_OLD_BASE = "https://triblyqr.netlify.app/review";
+const REVIEW_NEW_BASE = "https://qr.tribly.ai/review";
+
+function normalizeReviewUrl(url: string | null | undefined): string {
+  if (!url) return "";
+  return url.replace(REVIEW_OLD_BASE, REVIEW_NEW_BASE);
+}
+
 export default function BusinessDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -126,11 +134,10 @@ export default function BusinessDetailPage() {
   const [showBusinessServiceSuggestions, setShowBusinessServiceSuggestions] = useState(false);
   const [aiServiceSuggestions, setAiServiceSuggestions] = useState<string[]>([]);
   const [isLoadingAiSuggestions, setIsLoadingAiSuggestions] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [savingSection, setSavingSection] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadRetryKey, setLoadRetryKey] = useState(0);
   const [qrCodeError, setQrCodeError] = useState<string | null>(null);
-  const hasInitialLoadRef = useRef(false);
 
   // Last-saved snapshots for change detection
   const lastSavedRef = useRef<{
@@ -281,6 +288,8 @@ export default function BusinessDetailPage() {
           const apiResponse = await response.json();
           const qrData = apiResponse.data;
 
+          const normalizedReviewUrl = normalizeReviewUrl(qrData.business_review_url);
+
           // Map API response to Business type
           const mappedBusiness: Business = {
             id: businessSlug,
@@ -296,7 +305,7 @@ export default function BusinessDetailPage() {
             overview: qrData.business_description || "",
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-            reviewUrl: qrData.business_review_url || "",
+            reviewUrl: normalizedReviewUrl,
             googleBusinessReviewLink: qrData.business_google_review_url || "",
             keywords: Array.isArray(qrData.business_tags) ? qrData.business_tags : [],
             feedbackTone: "professional",
@@ -316,7 +325,7 @@ export default function BusinessDetailPage() {
             mergeBusinessWithOverrides(mappedBusiness, qrOverrides, qrData.business_website || "");
           setBusiness(mergedQrBusiness);
           setWebsite(mergedQrWebsite || qrData.business_website || "");
-          setReviewUrl(qrData.business_review_url || "");
+          setReviewUrl(normalizedReviewUrl);
 
           // Use business_qr_code_url from API if available, otherwise generate QR code
           if (qrData.business_qr_code_url) {
@@ -396,13 +405,6 @@ export default function BusinessDetailPage() {
 
     loadBusinessData();
   }, [businessSlug, router, loadRetryKey]);
-
-  // Mark initial load complete (skip autosave on first paint)
-  useEffect(() => {
-    if (business && !isLoading) {
-      hasInitialLoadRef.current = true;
-    }
-  }, [business?.id, isLoading]);
 
   // Initialize last-saved snapshots when business loads (for change detection)
   useEffect(() => {
@@ -683,24 +685,18 @@ export default function BusinessDetailPage() {
 
       const updatedKeywords = [...currentKeywords, trimmedKeyword];
       handleUpdateBusiness({
-        keywords: updatedKeywords
+        keywords: updatedKeywords,
       });
       setNewKeyword("");
-
-      // Send keywords to API
-      await sendKeywordsToAPI(updatedKeywords);
     }
   };
 
   const handleRemoveKeyword = async (keywordToRemove: string) => {
     if (business && business.keywords) {
-      const updatedKeywords = business.keywords.filter(k => k !== keywordToRemove);
+      const updatedKeywords = business.keywords.filter((k) => k !== keywordToRemove);
       handleUpdateBusiness({
-        keywords: updatedKeywords
+        keywords: updatedKeywords,
       });
-
-      // Send updated keywords to API
-      await sendKeywordsToAPI(updatedKeywords);
     }
   };
 
@@ -1071,37 +1067,16 @@ export default function BusinessDetailPage() {
     }
   };
 
-  // Autosave: debounced save when business or website changes
-  useEffect(() => {
-    if (!business || isLoading || !hasInitialLoadRef.current) return;
-    const hasAnyChange =
-      hasBusinessInfoChanges ||
-      hasLinksChanges ||
-      hasAutoReplyChanges ||
-      hasKeywordsChanges;
-    if (!hasAnyChange) return;
-
-    const timer = setTimeout(async () => {
-      setIsSaving(true);
-      try {
-        await handleSaveChanges("Business information", true); // autosave sends full payload
-        setToastMessage("Changes saved");
-        setShowToast(true);
-      } finally {
-        setIsSaving(false);
-      }
-    }, 800);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleSaveChanges intentionally excluded
-  }, [
-    business,
-    website,
-    isLoading,
-    hasBusinessInfoChanges,
-    hasLinksChanges,
-    hasAutoReplyChanges,
-    hasKeywordsChanges,
-  ]);
+  // Manual save handler for individual sections (triggered by Save buttons)
+  const handleSectionSave = async (section: string) => {
+    if (!business || savingSection === section) return;
+    setSavingSection(section);
+    try {
+      await handleSaveChanges(section, false);
+    } finally {
+      setSavingSection(null);
+    }
+  };
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -1247,7 +1222,39 @@ export default function BusinessDetailPage() {
     router.push("/login");
   };
 
-  const activeMobileTabItem = MOBILE_MAIN_TAB_ITEMS.find((item) => item.value === activeTab) ?? MOBILE_MAIN_TAB_ITEMS[0];
+  const activeMobileTabItem =
+    MOBILE_MAIN_TAB_ITEMS.find((item) => item.value === activeTab) ??
+    MOBILE_MAIN_TAB_ITEMS[0];
+
+  const isOnSettingsTab = activeTab === "settings";
+
+  let settingsSaveSectionKey: string | null = null;
+  let settingsSaveLabel = "Save changes";
+  let settingsHasChanges = false;
+
+  if (settingsSubTab === "business-info") {
+    settingsSaveSectionKey = "Business information";
+    settingsSaveLabel = "Save business information";
+    settingsHasChanges = hasBusinessInfoChanges;
+  } else if (settingsSubTab === "keywords") {
+    settingsSaveSectionKey = "Keywords";
+    settingsSaveLabel = "Save keywords";
+    settingsHasChanges = hasKeywordsChanges;
+  } else if (settingsSubTab === "links") {
+    settingsSaveSectionKey = "Business links";
+    settingsSaveLabel = "Save links";
+    settingsHasChanges = hasLinksChanges;
+  } else if (settingsSubTab === "auto-reply") {
+    settingsSaveSectionKey = "Auto-reply settings";
+    settingsSaveLabel = "Save auto-reply settings";
+    settingsHasChanges = hasAutoReplyChanges;
+  }
+
+  const isSettingsSectionSaving =
+    !!settingsSaveSectionKey && savingSection === settingsSaveSectionKey;
+
+  const settingsSaveDisabled =
+    !settingsSaveSectionKey || !settingsHasChanges || isSettingsSectionSaving;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF]">
@@ -1429,7 +1436,7 @@ export default function BusinessDetailPage() {
               {/* Desktop: 5-column grid (Business Info, Keywords, Links, Auto Reply, Payment) */}
               <div className="hidden md:block">
                 <div className="rounded-xl border border-border/80 bg-white p-1.5 shadow-sm">
-                  <TabsList className="grid h-auto w-full grid-cols-5 gap-1.5 border-0 bg-transparent p-0 shadow-none">
+                  <TabsList className="grid h-auto w-full grid-cols-4 gap-1.5 border-0 bg-transparent p-0 shadow-none">
                     <TabsTrigger
                       value="business-info"
                       className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
@@ -1458,13 +1465,7 @@ export default function BusinessDetailPage() {
                       <Bot className="h-4 w-4 shrink-0" />
                       <span>Auto Reply</span>
                     </TabsTrigger>
-                    <TabsTrigger
-                      value="payment"
-                      className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
-                    >
-                      <CreditCard className="h-4 w-4 shrink-0" />
-                      <span>Payment</span>
-                    </TabsTrigger>
+                    {/* Payment tab temporarily hidden */}
                   </TabsList>
                 </div>
               </div>
@@ -1504,13 +1505,7 @@ export default function BusinessDetailPage() {
                       <Bot className="h-5 w-5 shrink-0" />
                       <span className="whitespace-nowrap">Auto Reply</span>
                     </TabsTrigger>
-                    <TabsTrigger
-                      value="payment"
-                      className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
-                    >
-                      <CreditCard className="h-5 w-5 shrink-0" />
-                      <span className="whitespace-nowrap">Payment</span>
-                    </TabsTrigger>
+                    {/* Payment tab temporarily hidden on mobile as well */}
                   </TabsList>
                 </div>
               </div>
@@ -1981,7 +1976,7 @@ export default function BusinessDetailPage() {
                         />
                       </div>
                     </div>
-                  </CardContent>
+              </CardContent>
                 </Card>
               </TabsContent>
               <TabsContent value="keywords" className="mt-5 space-y-6">
@@ -1992,7 +1987,6 @@ export default function BusinessDetailPage() {
                   handleAddKeyword={handleAddKeyword}
                   handleRemoveKeyword={handleRemoveKeyword}
                   handleUpdateBusiness={handleUpdateBusiness}
-                  sendKeywordsToAPI={sendKeywordsToAPI}
                   suggestedKeywords={suggestedKeywords}
                   suggestionsLimit={suggestionsLimit}
                   setSuggestionsLimit={setSuggestionsLimit}
@@ -2275,291 +2269,9 @@ export default function BusinessDetailPage() {
                 )}
 
                 <Separator />
-
               </CardContent>
             </Card>
           </TabsContent>
-              <TabsContent value="payment" className="mt-5 space-y-6">
-            {/* Plan Comparison - horizontal scroll on mobile, grid on desktop */}
-            <div className="flex overflow-x-auto gap-6 pb-2 snap-x snap-mandatory -mx-3 px-3 lg:mx-0 lg:px-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:auto-rows-fr">
-              {/* QR-Plus Plan */}
-              <Card className={`relative flex-shrink-0 w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] snap-center lg:w-auto lg:flex-shrink lg:min-w-0 ${business.paymentPlan === "qr-plus" ? "ring-2 ring-inset ring-primary" : ""}`}>
-              <CardHeader>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 rounded-xl bg-primary text-primary-foreground">
-                        <Crown className="h-6 w-6" />
-                      </div>
-                  <div>
-                        <div className="flex items-center gap-2">
-                          <CardTitle className="text-2xl">QR-Plus</CardTitle>
-                          <Badge variant="secondary" className="text-xs">Premium</Badge>
-                  </div>
-                        <CardDescription>Advanced features for growth</CardDescription>
-                        <div className="mt-1">
-                          <span className="text-2xl font-bold">₹6,999</span>
-                          <span className="text-sm text-muted-foreground">/year</span>
-                        </div>
-                      </div>
-                    </div>
-                    {business.paymentPlan === "qr-plus" && (
-                      <Badge variant="default" className="text-xs">
-                        Current Plan
-                  </Badge>
-                    )}
-                </div>
-              </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">All QR-Basic Features, Plus:</h4>
-                    <div className="space-y-2">
-                      <div className="flex items-start gap-3">
-                        <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">Negative Feedback Control & Care</p>
-                          <p className="text-xs text-muted-foreground">Proactive management of negative reviews</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">Positive Feedback Growth</p>
-                          <p className="text-xs text-muted-foreground">Strategies to boost positive reviews</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">SEO Boost</p>
-                          <p className="text-xs text-muted-foreground">Enhanced search engine visibility</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">AI Auto Reply</p>
-                          <p className="text-xs text-muted-foreground">Intelligent automated responses</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">Advanced Analytics</p>
-                          <p className="text-xs text-muted-foreground">Deep insights and trend analysis</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">Priority Support</p>
-                          <p className="text-xs text-muted-foreground">24/7 dedicated customer support</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">Free AI QR Stand</p>
-                          <p className="text-xs text-muted-foreground">Free AI QR stand to boost your google reviews</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">GBP Score Analysis & Insights</p>
-                          <p className="text-xs text-muted-foreground">Track your Google Business Profile performance score</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">SEO Keyword Suggestions</p>
-                          <p className="text-xs text-muted-foreground">Location-based keyword recommendations for better rankings</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">Review Collection Automation</p>
-                          <p className="text-xs text-muted-foreground">Fully automated review collection workflows</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">Direct Review Links</p>
-                          <p className="text-xs text-muted-foreground">Generate direct links to your Google review page</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  {business.paymentPlan !== "qr-plus" && (
-                    <Button
-                      className="w-full"
-                      onClick={() => handleUpdateBusiness({ paymentPlan: "qr-plus" })}
-                    >
-                      Upgrade to QR-Plus
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* QR-Basic Plan */}
-              <Card className={`relative flex-shrink-0 w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] snap-center lg:w-auto lg:flex-shrink lg:min-w-0 ${business.paymentPlan === "qr-basic" ? "ring-2 ring-inset ring-primary" : ""}`}>
-                <CardHeader>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 rounded-xl bg-muted">
-                        <Shield className="h-6 w-6" />
-                  </div>
-                      <div>
-                        <CardTitle className="text-2xl">QR-Basic</CardTitle>
-                        <CardDescription>Essential features for your business</CardDescription>
-                        <div className="mt-1">
-                          <span className="text-2xl font-bold">₹2,999</span>
-                          <span className="text-sm text-muted-foreground">/year</span>
-                        </div>
-                      </div>
-                    </div>
-                    {business.paymentPlan === "qr-basic" && (
-                      <Badge variant="default" className="text-xs">
-                        Current Plan
-                        </Badge>
-                      )}
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Features</h4>
-                    <div className="space-y-2">
-                      <div className="flex items-start gap-3">
-                        <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">AI Suggested Feedbacks</p>
-                          <p className="text-xs text-muted-foreground">Get intelligent feedback suggestions</p>
-                  </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">Hassle-free Review Collection</p>
-                          <p className="text-xs text-muted-foreground">Collect reviews in under 30 seconds</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">Dynamic Dashboard</p>
-                          <p className="text-xs text-muted-foreground">Real-time insights and analytics</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">No Repetition</p>
-                          <p className="text-xs text-muted-foreground">Smart duplicate detection</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">Free AI QR Stand</p>
-                          <p className="text-xs text-muted-foreground">Free AI QR stand to boost your google reviews</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">GBP Score Analysis & Insights</p>
-                          <p className="text-xs text-muted-foreground">Track your Google Business Profile performance score</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-sm">Direct Review Links</p>
-                          <p className="text-xs text-muted-foreground">Generate direct links to your Google review page</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  {business.paymentPlan !== "qr-basic" && (
-                    <Button
-                      className="w-full"
-                      variant="outline"
-                      onClick={() => handleUpdateBusiness({ paymentPlan: "qr-basic" })}
-                    >
-                      Switch to QR-Basic
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-                </div>
-
-            {/* Payment Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Payment
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Plan Expiry Date</Label>
-                    <div className="mt-1 flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-lg font-semibold">
-                        {business.paymentExpiryDate
-                          ? new Date(business.paymentExpiryDate).toLocaleDateString("en-IN", {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })
-                          : "Not set"}
-                      </span>
-                    </div>
-                    {business.paymentExpiryDate && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {new Date(business.paymentExpiryDate) > new Date()
-                          ? `${Math.ceil((new Date(business.paymentExpiryDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days remaining`
-                          : "Expired"}
-                      </p>
-                    )}
-                    </div>
-                  <Button
-                    size="lg"
-                    className="gap-2"
-                    onClick={() => {
-                      if (business.paymentStatus === "active" && business.paymentExpiryDate) {
-                        const expiryDate = new Date(business.paymentExpiryDate);
-                        const daysUntilExpiry = Math.ceil((expiryDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-                        if (expiryDate > new Date() && daysUntilExpiry > 60) {
-                          setToastMessage(`Your subscription is active. Payment can be renewed ${daysUntilExpiry - 60} days before expiry (when ${daysUntilExpiry} days or less remain).`);
-                          setShowToast(true);
-                          return;
-                        }
-                      }
-                      setShowPaymentDialog(true);
-                    }}
-                    disabled={
-                      !business.paymentPlan ||
-                      !!(business.paymentStatus === "active" &&
-                       business.paymentExpiryDate &&
-                       (() => {
-                         const expiryDate = new Date(business.paymentExpiryDate);
-                         const daysUntilExpiry = Math.ceil((expiryDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-                         return expiryDate > new Date() && daysUntilExpiry > 60;
-                       })())
-                    }
-                  >
-                    <CreditCard className="h-5 w-5" />
-                    Complete Payment
-                  </Button>
-                          </div>
-              </CardContent>
-            </Card>
-              </TabsContent>
             </Tabs>
           </TabsContent>
 
@@ -2697,6 +2409,29 @@ export default function BusinessDetailPage() {
             </div>
           </div>
         </Tabs>
+
+        {isOnSettingsTab && settingsSaveSectionKey && (
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 px-3 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:px-4 md:py-4">
+            <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+              <p className="hidden text-xs text-muted-foreground sm:block">
+                {settingsHasChanges
+                  ? "You have unsaved changes in Settings."
+                  : "All changes are saved."}
+              </p>
+              <Button
+                size="sm"
+                className="ml-auto min-w-[150px]"
+                disabled={settingsSaveDisabled}
+                onClick={() => {
+                  if (!settingsSaveSectionKey || settingsSaveDisabled) return;
+                  void handleSectionSave(settingsSaveSectionKey);
+                }}
+              >
+                {isSettingsSectionSaving ? "Saving..." : settingsSaveLabel}
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <footer className="mt-12 hidden border-t border-border/60 pt-8 md:block md:mt-[120px]">

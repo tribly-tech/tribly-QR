@@ -119,8 +119,10 @@ export function BasicInformationCard({
                 setNewBusiness({
                   ...newBusiness,
                   category: value as BusinessCategory,
+                  services: [],
                 });
                 setServiceInput("");
+                setShowServiceSuggestions(false);
               }}
             >
               <SelectTrigger id="category">
@@ -159,9 +161,15 @@ export function BasicInformationCard({
                       key={cat}
                       variant="outline"
                       className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                      onClick={() =>
-                        setNewBusiness({ ...newBusiness, category: cat })
-                      }
+                      onClick={() => {
+                        setNewBusiness({
+                          ...newBusiness,
+                          category: cat,
+                          services: [],
+                        });
+                        setServiceInput("");
+                        setShowServiceSuggestions(false);
+                      }}
                     >
                       {cat
                         .split("-")
@@ -176,7 +184,7 @@ export function BasicInformationCard({
               </div>
             )}
 
-            {/* Category-specific suggestions */}
+            {/* Category-specific suggestions — click to add/remove as services (matches /dashboard/business/) */}
             {newBusiness.category &&
               categorySuggestions[newBusiness.category as BusinessCategory] && (
                 <div className="mt-2">
@@ -188,15 +196,25 @@ export function BasicInformationCard({
                       newBusiness.category as BusinessCategory
                     ]
                       .slice(0, 5)
-                      .map((suggestion) => (
-                        <Badge
-                          key={suggestion}
-                          variant="secondary"
-                          className="text-xs"
-                        >
-                          {suggestion}
-                        </Badge>
-                      ))}
+                      .map((suggestion) => {
+                        const isSelected = newBusiness.services.includes(suggestion);
+                        return (
+                          <Badge
+                            key={suggestion}
+                            variant={isSelected ? "default" : "secondary"}
+                            className="text-xs cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+                            onClick={() => {
+                              if (isSelected) {
+                                handleRemoveService(suggestion);
+                              } else {
+                                handleAddService(suggestion);
+                              }
+                            }}
+                          >
+                            {suggestion}
+                          </Badge>
+                        );
+                      })}
                   </div>
                 </div>
               )}

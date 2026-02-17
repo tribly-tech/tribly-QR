@@ -318,7 +318,7 @@ function FeedbackPageContent() {
 
   if (!rating) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex flex-col items-center justify-center p-4">
+      <main className="min-h-screen bg-gradient-to-br from-[#FDF2FF] via-[#E9F4FF] to-[#FFF9E6] flex flex-col items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Invalid Rating</CardTitle>
@@ -337,15 +337,15 @@ function FeedbackPageContent() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] p-4 sm:p-6">
+    <main className="min-h-screen bg-gradient-to-br from-[#FDF2FF] via-[#E9F4FF] to-[#FFF9E6] p-4 sm:p-6">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div>
           <h1 className="text-2xl sm:text-3xl font-semibold text-foreground">
-            AI Recommended Feedbacks
+            AI-powered review suggestions
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Based on your {rating === 5 ? "Excellent" : rating === 4 ? "Good" : "Average"} rating
+            These AI-generated review messages are tailored to your {ratingLabel} rating. Choose one and customize it before posting.
           </p>
         </div>
 
@@ -495,7 +495,7 @@ function FeedbackPageContent() {
 export default function FeedbackPage() {
   return (
     <Suspense fallback={
-      <main className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex flex-col items-center justify-center p-4">
+      <main className="min-h-screen bg-gradient-to-br from-[#FDF2FF] via-[#E9F4FF] to-[#FFF9E6] flex flex-col items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
             <div className="flex flex-col items-center gap-4">

@@ -264,6 +264,8 @@ export interface GBPHealthReportViewProps {
   top3Loading?: boolean;
   /** Optional. When provided after auth, discovery and customer action metrics are shown; otherwise blank. */
   discoveryAndActions?: GBPDiscoveryAndActions | null;
+  /** When true, hides the "Discovery & customer actions" section (e.g. on sales analysis-report page). */
+  hideDiscoverySection?: boolean;
 }
 
 const BLANK_VALUE = "—";
@@ -278,6 +280,7 @@ export function GBPHealthReportView({
   top3Result = null,
   top3Loading = false,
   discoveryAndActions = null,
+  hideDiscoverySection = false,
 }: GBPHealthReportViewProps) {
   const [selectedMetric, setSelectedMetric] = useState<{
     key: MetricKey;
@@ -515,132 +518,134 @@ export function GBPHealthReportView({
         </CardContent>
       </Card>
 
-      {/* Discovery & Customer actions — data from GBP after auth; show blank when absent */}
-      <div className="space-y-4">
-        <div>
-          <h2
-            className="text-lg sm:text-xl font-semibold text-gray-900"
-            style={{ fontFamily: "var(--font-clash-grotesk), sans-serif", fontWeight: 600 }}
-          >
-            Discovery & customer actions
-          </h2>
-          <p className="text-sm text-gray-600 mt-1">
-            How customers find you and what they do next. Data appears after connecting your Google Business Profile.
-          </p>
+      {/* Discovery & Customer actions — data from GBP after auth; show blank when absent. Hidden when hideDiscoverySection is true (e.g. analysis-report). */}
+      {!hideDiscoverySection && (
+        <div className="space-y-4">
+          <div>
+            <h2
+              className="text-lg sm:text-xl font-semibold text-gray-900"
+              style={{ fontFamily: "var(--font-clash-grotesk), sans-serif", fontWeight: 600 }}
+            >
+              Discovery & customer actions
+            </h2>
+            <p className="text-sm text-gray-600 mt-1">
+              How customers find you and what they do next. Data appears after connecting your Google Business Profile.
+            </p>
+          </div>
+          <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 gap-5 overflow-x-auto md:overflow-x-visible pb-4 md:pb-0 px-1 md:px-0 scrollbar-hide">
+            {/* Discovery */}
+            <Card className="border border-gray-200 min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
+              <CardHeader className="pb-4 border-b border-gray-200 mb-6">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-xl bg-blue-50">
+                    <SearchIcon className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div className="flex flex-col flex-1">
+                    <CardTitle className="text-base font-semibold text-gray-900">Search queries</CardTitle>
+                    <CardDescription className="text-xs text-gray-600 mt-1">How often your business was searched for</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
+                  {formatDiscoveryValue(discoveryAndActions?.discovery?.searchQueries)}
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border border-gray-200 min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
+              <CardHeader className="pb-4 border-b border-gray-200 mb-6">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-xl bg-indigo-50">
+                    <Eye className="h-5 w-5 text-indigo-600" />
+                  </div>
+                  <div className="flex flex-col flex-1">
+                    <CardTitle className="text-base font-semibold text-gray-900">Search views</CardTitle>
+                    <CardDescription className="text-xs text-gray-600 mt-1">Times your listing appeared in search results</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
+                  {formatDiscoveryValue(discoveryAndActions?.discovery?.searchViews)}
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border border-gray-200 min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
+              <CardHeader className="pb-4 border-b border-gray-200 mb-6">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-xl bg-sky-50">
+                    <MapPin className="h-5 w-5 text-sky-600" />
+                  </div>
+                  <div className="flex flex-col flex-1">
+                    <CardTitle className="text-base font-semibold text-gray-900">Map views</CardTitle>
+                    <CardDescription className="text-xs text-gray-600 mt-1">Times your listing was viewed on Maps</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
+                  {formatDiscoveryValue(discoveryAndActions?.discovery?.mapViews)}
+                </div>
+              </CardContent>
+            </Card>
+            {/* Customer actions */}
+            <Card className="border border-gray-200 min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
+              <CardHeader className="pb-4 border-b border-gray-200 mb-6">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-xl bg-emerald-50">
+                    <Globe className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div className="flex flex-col flex-1">
+                    <CardTitle className="text-base font-semibold text-gray-900">Website clicks</CardTitle>
+                    <CardDescription className="text-xs text-gray-600 mt-1">Clicks to your website from the listing</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
+                  {formatDiscoveryValue(discoveryAndActions?.customerActions?.websiteClicks)}
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border border-gray-200 min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
+              <CardHeader className="pb-4 border-b border-gray-200 mb-6">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-xl bg-amber-50">
+                    <Navigation className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div className="flex flex-col flex-1">
+                    <CardTitle className="text-base font-semibold text-gray-900">Direction requests</CardTitle>
+                    <CardDescription className="text-xs text-gray-600 mt-1">Requests for directions to your business</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
+                  {formatDiscoveryValue(discoveryAndActions?.customerActions?.directionRequests)}
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border border-gray-200 min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
+              <CardHeader className="pb-4 border-b border-gray-200 mb-6">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-xl bg-rose-50">
+                    <Phone className="h-5 w-5 text-rose-600" />
+                  </div>
+                  <div className="flex flex-col flex-1">
+                    <CardTitle className="text-base font-semibold text-gray-900">Phone calls</CardTitle>
+                    <CardDescription className="text-xs text-gray-600 mt-1">Calls made from the listing</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
+                  {formatDiscoveryValue(discoveryAndActions?.customerActions?.phoneCalls)}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-        <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 gap-5 overflow-x-auto md:overflow-x-visible pb-4 md:pb-0 px-1 md:px-0 scrollbar-hide">
-          {/* Discovery */}
-          <Card className="border border-gray-200 min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
-            <CardHeader className="pb-4 border-b border-gray-200 mb-6">
-              <div className="flex items-start gap-3">
-                <div className="p-2.5 rounded-xl bg-blue-50">
-                  <SearchIcon className="h-5 w-5 text-blue-600" />
-                </div>
-                <div className="flex flex-col flex-1">
-                  <CardTitle className="text-base font-semibold text-gray-900">Search queries</CardTitle>
-                  <CardDescription className="text-xs text-gray-600 mt-1">How often your business was searched for</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
-                {formatDiscoveryValue(discoveryAndActions?.discovery?.searchQueries)}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border border-gray-200 min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
-            <CardHeader className="pb-4 border-b border-gray-200 mb-6">
-              <div className="flex items-start gap-3">
-                <div className="p-2.5 rounded-xl bg-indigo-50">
-                  <Eye className="h-5 w-5 text-indigo-600" />
-                </div>
-                <div className="flex flex-col flex-1">
-                  <CardTitle className="text-base font-semibold text-gray-900">Search views</CardTitle>
-                  <CardDescription className="text-xs text-gray-600 mt-1">Times your listing appeared in search results</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
-                {formatDiscoveryValue(discoveryAndActions?.discovery?.searchViews)}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border border-gray-200 min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
-            <CardHeader className="pb-4 border-b border-gray-200 mb-6">
-              <div className="flex items-start gap-3">
-                <div className="p-2.5 rounded-xl bg-sky-50">
-                  <MapPin className="h-5 w-5 text-sky-600" />
-                </div>
-                <div className="flex flex-col flex-1">
-                  <CardTitle className="text-base font-semibold text-gray-900">Map views</CardTitle>
-                  <CardDescription className="text-xs text-gray-600 mt-1">Times your listing was viewed on Maps</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
-                {formatDiscoveryValue(discoveryAndActions?.discovery?.mapViews)}
-              </div>
-            </CardContent>
-          </Card>
-          {/* Customer actions */}
-          <Card className="border border-gray-200 min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
-            <CardHeader className="pb-4 border-b border-gray-200 mb-6">
-              <div className="flex items-start gap-3">
-                <div className="p-2.5 rounded-xl bg-emerald-50">
-                  <Globe className="h-5 w-5 text-emerald-600" />
-                </div>
-                <div className="flex flex-col flex-1">
-                  <CardTitle className="text-base font-semibold text-gray-900">Website clicks</CardTitle>
-                  <CardDescription className="text-xs text-gray-600 mt-1">Clicks to your website from the listing</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
-                {formatDiscoveryValue(discoveryAndActions?.customerActions?.websiteClicks)}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border border-gray-200 min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
-            <CardHeader className="pb-4 border-b border-gray-200 mb-6">
-              <div className="flex items-start gap-3">
-                <div className="p-2.5 rounded-xl bg-amber-50">
-                  <Navigation className="h-5 w-5 text-amber-600" />
-                </div>
-                <div className="flex flex-col flex-1">
-                  <CardTitle className="text-base font-semibold text-gray-900">Direction requests</CardTitle>
-                  <CardDescription className="text-xs text-gray-600 mt-1">Requests for directions to your business</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
-                {formatDiscoveryValue(discoveryAndActions?.customerActions?.directionRequests)}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border border-gray-200 min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
-            <CardHeader className="pb-4 border-b border-gray-200 mb-6">
-              <div className="flex items-start gap-3">
-                <div className="p-2.5 rounded-xl bg-rose-50">
-                  <Phone className="h-5 w-5 text-rose-600" />
-                </div>
-                <div className="flex flex-col flex-1">
-                  <CardTitle className="text-base font-semibold text-gray-900">Phone calls</CardTitle>
-                  <CardDescription className="text-xs text-gray-600 mt-1">Calls made from the listing</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
-                {formatDiscoveryValue(discoveryAndActions?.customerActions?.phoneCalls)}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      )}
 
       {/* Detailed Metrics Grid — click card to open problem detail */}
       <div className="space-y-4">

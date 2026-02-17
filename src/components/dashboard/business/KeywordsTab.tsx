@@ -14,7 +14,6 @@ interface KeywordsTabProps {
   handleAddKeyword: () => void;
   handleRemoveKeyword: (keyword: string) => void;
   handleUpdateBusiness: (updates: Partial<Business>) => void;
-  sendKeywordsToAPI: (keywords: string[]) => Promise<void>;
   suggestedKeywords: string[];
   suggestionsLimit: number;
   setSuggestionsLimit: Dispatch<SetStateAction<number>>;
@@ -28,7 +27,6 @@ export function KeywordsTab({
   handleAddKeyword,
   handleRemoveKeyword,
   handleUpdateBusiness,
-  sendKeywordsToAPI,
   suggestedKeywords,
   suggestionsLimit,
   setSuggestionsLimit,
@@ -130,8 +128,6 @@ export function KeywordsTab({
                           handleUpdateBusiness({
                             keywords: updatedKeywords,
                           });
-                          // Send keywords to API
-                          await sendKeywordsToAPI(updatedKeywords);
                         }
                       }
                     }}

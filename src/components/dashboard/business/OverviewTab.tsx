@@ -429,75 +429,42 @@ const buildInitialSocialPlatforms = (businessName: string): SocialPlatformData[]
     key: "instagram",
     name: "Instagram",
     icon: <img src="/assets/instagram-logo.png" alt="Instagram" className="h-5 w-5 object-contain" />,
-    status: "connected",
-    lastSync: "2 min ago",
-    engagementGrowth: 19.7,
-    miniChart: [10, 12, 15, 14, 18, 21, 24, 26],
-    commonMetrics: [
-      { label: "Posts published", value: "22", delta: "+9%" },
-      { label: "Engagement", value: "5.4K", delta: "+18%" },
-      { label: "Impressions", value: "62.1K", delta: "+14%" },
-      { label: "Reach", value: "31.4K", delta: "+16%" },
-      { label: "Followers", value: "12.7K", delta: "+5%" },
-    ],
-    platformMetrics: [
-      { label: "Profile visits", value: "3.4K", delta: "+12%" },
-      { label: "Reels reach", value: "18.2K", delta: "+22%" },
-      { label: "Saves", value: "640", delta: "+7%" },
-    ],
+    status: "not_connected",
+    lastSync: "Not synced yet",
+    engagementGrowth: 0,
+    miniChart: [],
+    commonMetrics: [],
+    platformMetrics: [],
     highlights: [
-      "Reels featuring product demos drive the highest reach.",
-      "Stories with polls increase profile visits by 2x.",
+      "Connect Instagram to track posts, reach, and engagement in one place.",
     ],
   },
   {
     key: "youtube",
     name: "YouTube",
     icon: <img src="/assets/youtube-logo.png" alt="YouTube" className="h-5 w-5 object-contain" />,
-    status: "reconnect",
-    lastSync: "2 days ago",
-    engagementGrowth: 6.1,
-    miniChart: [6, 8, 7, 10, 12, 9, 11, 13],
-    commonMetrics: [
-      { label: "Posts published", value: "6", delta: "+4%" },
-      { label: "Engagement", value: "1.2K", delta: "+6%" },
-      { label: "Impressions", value: "18.9K", delta: "+3%" },
-      { label: "Reach", value: "12.4K", delta: "+2%" },
-      { label: "Subscribers", value: "4.9K", delta: "+2%" },
-    ],
-    platformMetrics: [
-      { label: "Views", value: "14.1K", delta: "+5%" },
-      { label: "Watch time", value: "118 hrs", delta: "+8%" },
-      { label: "CTR", value: "4.6%", delta: "+0.4%" },
-    ],
+    status: "not_connected",
+    lastSync: "Not synced yet",
+    engagementGrowth: 0,
+    miniChart: [],
+    commonMetrics: [],
+    platformMetrics: [],
     highlights: [
-      "Short-form videos are trending with 2.4x engagement.",
-      "Reconnect to refresh watch time and CTR insights.",
+      "Connect YouTube to monitor views, watch time, and subscriber growth.",
     ],
   },
   {
     key: "facebook",
     name: "Facebook",
     icon: <img src="/assets/facebook-logo.png" alt="Facebook" className="h-5 w-5 object-contain" />,
-    status: "connected",
-    lastSync: "8 min ago",
-    engagementGrowth: 8.9,
-    miniChart: [9, 10, 12, 11, 13, 15, 17, 16],
-    commonMetrics: [
-      { label: "Posts published", value: "18", delta: "+6%" },
-      { label: "Engagement", value: "3.1K", delta: "+9%" },
-      { label: "Impressions", value: "38.4K", delta: "+8%" },
-      { label: "Reach", value: "22.6K", delta: "+6%" },
-      { label: "Followers", value: "9.8K", delta: "+4%" },
-    ],
-    platformMetrics: [
-      { label: "Page visits", value: "2.1K", delta: "+7%" },
-      { label: "Post clicks", value: "1.4K", delta: "+5%" },
-      { label: "Shares", value: "286", delta: "+3%" },
-    ],
+    status: "not_connected",
+    lastSync: "Not synced yet",
+    engagementGrowth: 0,
+    miniChart: [],
+    commonMetrics: [],
+    platformMetrics: [],
     highlights: [
-      "Local posts outperform by 22% engagement rate.",
-      "Carousel posts drive the highest click-through.",
+      "Connect Facebook to see page visits, post performance, and audience growth.",
     ],
   },
   {
@@ -507,22 +474,11 @@ const buildInitialSocialPlatforms = (businessName: string): SocialPlatformData[]
     status: "not_connected",
     lastSync: "Not synced yet",
     engagementGrowth: 0,
-    miniChart: [2, 3, 2, 4, 3, 3, 2, 4],
-    commonMetrics: [
-      { label: "Messages sent", value: "0", delta: "0%" },
-      { label: "Conversations", value: "0", delta: "0%" },
-      { label: "Reach", value: "0", delta: "0%" },
-      { label: "Replies", value: "0", delta: "0%" },
-      { label: "Contacts", value: "0", delta: "0%" },
-    ],
-    platformMetrics: [
-      { label: "Clicks to chat", value: "-", delta: "" },
-      { label: "Response time", value: "-", delta: "" },
-      { label: "Business profile views", value: "-", delta: "" },
-    ],
+    miniChart: [],
+    commonMetrics: [],
+    platformMetrics: [],
     highlights: [
-      "Connect to unlock chat and customer engagement metrics.",
-      "WhatsApp helps you reach customers where they are.",
+      "Connect WhatsApp Business to unlock chat and customer engagement metrics.",
     ],
   },
 ];
@@ -591,44 +547,8 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
     return () => { cancelled = true; };
   }, [businessName]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSocialPlatforms((prev) => {
-        if (!Array.isArray(prev)) return prev;
-        return prev.map((platform) => {
-          if (platform?.status !== "connected") return platform;
-          const chart = Array.isArray(platform.miniChart) ? platform.miniChart : [];
-          const lastVal = chart.length > 0 ? chart[chart.length - 1] : 0;
-          const jitter = (Math.random() - 0.45) * 2;
-          const nextGrowth = Math.max(0, Number(platform.engagementGrowth) + jitter);
-          return {
-            ...platform,
-            engagementGrowth: Number(nextGrowth.toFixed(1)),
-            lastSync: "Just now",
-            miniChart: chart.length > 0 ? [...chart.slice(1), Math.max(4, lastVal + jitter * 2)] : chart,
-          };
-        });
-      });
-      if (!gbpFromApiRef.current) {
-        setGbp((prev) => {
-          if (!prev || prev.status !== "connected") return prev;
-          const chart = Array.isArray(prev.miniChart) ? prev.miniChart : [];
-          const lastVal = chart.length > 0 ? chart[chart.length - 1] : 0;
-          const jitter = (Math.random() - 0.45) * 2;
-          const nextGrowth = Math.max(0, Number(prev.engagementGrowth) + jitter);
-          return {
-            ...prev,
-            engagementGrowth: Number(nextGrowth.toFixed(1)),
-            lastSync: "Just now",
-            miniChart: chart.length > 0 ? [...chart.slice(1), Math.max(6, lastVal + jitter * 2)] : chart,
-          };
-        });
-      }
-      setLastSynced(new Date());
-    }, 8000);
-
-    return () => clearInterval(interval);
-  }, []);
+  // When real social platform metrics are available from the API,
+  // this state can be hydrated from the backend instead of mocks.
 
   const filteredGbp = useMemo(() => applyTimeRangeToGbp(gbp, timeRange), [gbp, timeRange]);
   const filteredSocialPlatforms = useMemo(
@@ -1159,7 +1079,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                 className="flex-shrink-0 min-w-[364px] bg-white transition-shadow hover:shadow-md lg:min-w-0"
               >
                 <CardHeader className="space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <div className="flex shrink-0 items-center justify-center overflow-hidden [&_img]:h-8 [&_img]:w-8">
                         {platform.icon}
@@ -1169,18 +1089,23 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                         <CardDescription>Last sync: {platform.lastSync}</CardDescription>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDisconnectConfirmKey(platform.key);
-                      }}
-                      title={`Disconnect ${platform.name}`}
-                    >
-                      <Unplug className="h-4 w-4" />
-                    </Button>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge className="rounded-full border border-[#C4A7FF] bg-[#F5ECFF] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#5B21B6]">
+                        Coming soon
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDisconnectConfirmKey(platform.key);
+                        }}
+                        title={`Disconnect ${platform.name}`}
+                      >
+                        <Unplug className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                   <div className="grid gap-3 md:grid-cols-[1fr_auto] items-center">
                     <div>
@@ -1280,7 +1205,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                 className="hover:shadow-md transition-shadow border-dashed bg-white/70"
               >
                 <CardHeader className="space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <div className="flex shrink-0 items-center justify-center overflow-hidden [&_img]:h-8 [&_img]:w-8">
                         {platform.icon}
@@ -1290,6 +1215,9 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                         <CardDescription>Last sync: {platform.lastSync}</CardDescription>
                       </div>
                     </div>
+                    <Badge className="rounded-full border border-[#C4A7FF] bg-[#F5ECFF] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#5B21B6]">
+                      Coming soon
+                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
