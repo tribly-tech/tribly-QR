@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,7 +32,7 @@ const socialButtons = [
   },
 ] as const;
 
-export default function FeedbackSubmittedPage() {
+function FeedbackSubmittedContent() {
   const searchParams = useSearchParams();
 
   return (
@@ -121,5 +122,21 @@ export default function FeedbackSubmittedPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+function FeedbackSubmittedFallback() {
+  return (
+    <main className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] p-4 sm:p-6 flex items-center justify-center">
+      <div className="text-muted-foreground text-sm">Loading...</div>
+    </main>
+  );
+}
+
+export default function FeedbackSubmittedPage() {
+  return (
+    <Suspense fallback={<FeedbackSubmittedFallback />}>
+      <FeedbackSubmittedContent />
+    </Suspense>
   );
 }
