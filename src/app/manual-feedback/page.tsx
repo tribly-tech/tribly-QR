@@ -94,7 +94,7 @@ function ManualFeedbackPageContent() {
 
       // Get Google Business review link and social URLs for thank-you page
       let googleReviewLink: string | null = null;
-      let business: ReturnType<typeof getBusinessById> = null;
+      let business: ReturnType<typeof getBusinessById> = undefined;
       if (businessId) {
         business = getBusinessById(businessId);
         googleReviewLink = business?.googleBusinessReviewLink ?? null;
