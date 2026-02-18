@@ -44,6 +44,8 @@ export interface Business {
   // Links
   reviewUrl?: string; // Unique short URL for reviews
   googleBusinessReviewLink?: string;
+  /** Google Place ID for fetching Google reviews via Places API */
+  googlePlaceId?: string;
   socialMediaLink?: string;
   // Settings
   feedbackTone: FeedbackTone;
@@ -80,3 +82,6 @@ export interface Review {
   autoReplySent: boolean;
   createdAt: string;
 }
+
+/** Source of the review for display (Google vs in-app manual feedback) */
+export type ReviewSource = "google" | "manual";

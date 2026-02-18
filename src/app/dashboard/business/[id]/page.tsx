@@ -37,6 +37,7 @@ import { OverviewTab } from "@/components/dashboard/business/OverviewTab";
 import { KeywordsTab } from "@/components/dashboard/business/KeywordsTab";
 import { GBPHealthTab } from "@/components/dashboard/business/GBPHealthTab";
 import { RecommendedActionsTab } from "@/components/dashboard/business/RecommendedActionsTab";
+import { ReviewsTab } from "@/components/dashboard/business/reviews";
 import {
   ArrowLeft,
   CreditCard,
@@ -111,7 +112,6 @@ export default function BusinessDetailPage() {
   const [reviewUrl, setReviewUrl] = useState<string>("");
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
-  const [selectedReviewFilter, setSelectedReviewFilter] = useState<ReviewCategory | null>(null);
   const [newKeyword, setNewKeyword] = useState("");
   const [suggestionsLimit, setSuggestionsLimit] = useState(12);
   const [isBusinessOwner, setIsBusinessOwner] = useState(false);
@@ -307,6 +307,7 @@ export default function BusinessDetailPage() {
             updatedAt: new Date().toISOString(),
             reviewUrl: normalizedReviewUrl,
             googleBusinessReviewLink: qrData.business_google_review_url || "",
+            googlePlaceId: qrData.google_place_id || qrData.place_id || undefined,
             keywords: Array.isArray(qrData.business_tags) ? qrData.business_tags : [],
             feedbackTone: "professional",
             autoReplyEnabled: false,
@@ -424,6 +425,7 @@ export default function BusinessDetailPage() {
         },
         links: {
           googleBusinessReviewLink: business.googleBusinessReviewLink || "",
+          googlePlaceId: business.googlePlaceId ?? "",
           socialMediaLink: business.socialMediaLink || "",
           website,
         },
@@ -591,22 +593,6 @@ export default function BusinessDetailPage() {
       setIsLoadingReviews(false);
     }
   };
-
-  // Get all reviews for the business
-  const allReviews = useMemo(() => {
-    if (!business) return [];
-    // If it's a QR ID, use API reviews (even if empty), otherwise use mock reviews
-    if (isQRId) {
-      return apiReviews;
-    }
-    return getReviewsByBusinessId(business.id);
-  }, [business, isQRId, apiReviews]);
-
-  // Filter reviews based on selected category
-  const filteredReviews = useMemo(() => {
-    if (!selectedReviewFilter) return allReviews;
-    return allReviews.filter((review) => review.category === selectedReviewFilter);
-  }, [allReviews, selectedReviewFilter]);
 
   const handleUpdateBusiness = (updates: Partial<Business>) => {
     if (business) {
@@ -854,6 +840,7 @@ export default function BusinessDetailPage() {
     const s = lastSavedRef.current.links;
     return (
       s.googleBusinessReviewLink !== (business.googleBusinessReviewLink || "") ||
+      s.googlePlaceId !== (business.googlePlaceId ?? "") ||
       s.socialMediaLink !== (business.socialMediaLink || "") ||
       s.website !== website
     );
@@ -893,6 +880,7 @@ export default function BusinessDetailPage() {
     } else if (section === "Business links") {
       r.links = {
         googleBusinessReviewLink: business.googleBusinessReviewLink || "",
+        googlePlaceId: business.googlePlaceId ?? "",
         socialMediaLink: business.socialMediaLink || "",
         website,
       };
@@ -1050,6 +1038,7 @@ export default function BusinessDetailPage() {
         overview: business.overview,
         services: business.services,
         googleBusinessReviewLink: business.googleBusinessReviewLink,
+        googlePlaceId: business.googlePlaceId,
         socialMediaLink: business.socialMediaLink,
         website,
         autoReplyEnabled: business.autoReplyEnabled,
@@ -2129,6 +2118,17 @@ export default function BusinessDetailPage() {
                   </p>
                 </div>
                 <div className="space-y-2">
+                  <Label>Google Place ID</Label>
+                  <Input
+                    value={business.googlePlaceId || ""}
+                    onChange={(e) => handleUpdateBusiness({ googlePlaceId: e.target.value.trim() || undefined })}
+                    placeholder="Enter your Google Place ID"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Optional: Paste your Google Place ID to show Google reviews from your Google Business Profile.
+                  </p>
+                </div>
+                <div className="space-y-2">
                   <Label>Social Media Link</Label>
                   <div className="flex gap-2">
                     <Input
@@ -2293,92 +2293,13 @@ export default function BusinessDetailPage() {
 
           {/* Reviews Tab */}
           <TabsContent value="reviews" className="space-y-6 mt-0">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5" />
-                  Customer Manual Reviews
-                  </CardTitle>
-                  <CardDescription>
-                  Reviews from customers who selected "Need Improvement" rating
-                  </CardDescription>
-                </CardHeader>
-              <CardContent>
-                {isLoadingReviews ? (
-                  <div className="text-center py-12">
-                    <Loader2 className="h-8 w-8 mx-auto mb-4 text-muted-foreground animate-spin" />
-                    <p className="text-muted-foreground">Loading reviews...</p>
-                      </div>
-                ) : filteredReviews.length === 0 && allReviews.length === 0 ? (
-                    <div className="text-center py-12">
-                      <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                      <p className="text-muted-foreground">No manual reviews yet</p>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        Reviews from customers who selected "Need Improvement" will appear here
-                      </p>
-                      </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {/* Reviews List */}
-                      {filteredReviews.length > 0 && (
-                  <div className="space-y-4">
-                          {filteredReviews.map((review) => (
-                        <Card key={review.id} className="border-l-4 border-l-orange-500">
-                          <CardContent className="pt-6">
-                            <div className="space-y-4">
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  {review.feedback && (
-                                    <p className="text-sm text-foreground leading-relaxed mb-3">
-                                      {review.feedback}
-                                    </p>
-                                  )}
-                    </div>
-                      </div>
-                              <Separator />
-                              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-                                {review.customerName && (
-                                  <div className="flex items-center gap-2 text-muted-foreground">
-                                    <User className="h-4 w-4" />
-                                    <span>{review.customerName}</span>
-                      </div>
-                                )}
-                                {review.customerEmail && (
-                                  <div className="flex items-center gap-2 text-muted-foreground">
-                                    <Mail className="h-4 w-4" />
-                                    <span>{review.customerEmail}</span>
-                              </div>
-                                )}
-                                {review.customerPhone && (
-                                  <div className="flex items-center gap-2 text-muted-foreground">
-                                    <Phone className="h-4 w-4" />
-                                    <span>{review.customerPhone}</span>
-                              </div>
-                                )}
-                                <div className="flex items-center gap-2 text-muted-foreground">
-                                  <Calendar className="h-4 w-4" />
-                                  <span>
-                                    {new Date(review.createdAt).toLocaleDateString("en-IN", {
-                                      year: "numeric",
-                                      month: "short",
-                                      day: "numeric",
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}
-                                  </span>
-                            </div>
-                            </div>
-                          </div>
-                          </CardContent>
-                        </Card>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+            <ReviewsTab
+              business={business}
+              manualReviews={isQRId ? apiReviews : (business ? getReviewsByBusinessId(business.id) : [])}
+              isLoadingManual={isLoadingReviews}
+              placeId={business?.googlePlaceId}
+            />
+          </TabsContent>
           </div>
 
           {/* Mobile bottom navigation - app style */}
@@ -2459,14 +2380,6 @@ export default function BusinessDetailPage() {
                 className="hover:text-foreground transition-colors"
               >
                 Contact
-              </a>
-              <a
-                href="https://tribly.ai"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-foreground transition-colors"
-              >
-                Help
               </a>
             </nav>
           </div>

@@ -17,6 +17,7 @@ export type BusinessEditOverrides = Partial<
     | "overview"
     | "services"
     | "googleBusinessReviewLink"
+    | "googlePlaceId"
     | "socialMediaLink"
     | "autoReplyEnabled"
     | "keywords"
@@ -79,6 +80,8 @@ export function mergeBusinessWithOverrides(
   if (overrides.services !== undefined) merged.services = overrides.services;
   if (overrides.googleBusinessReviewLink !== undefined)
     merged.googleBusinessReviewLink = overrides.googleBusinessReviewLink;
+  if (overrides.googlePlaceId !== undefined)
+    merged.googlePlaceId = overrides.googlePlaceId;
   if (overrides.socialMediaLink !== undefined)
     merged.socialMediaLink = overrides.socialMediaLink;
   if (overrides.autoReplyEnabled !== undefined)

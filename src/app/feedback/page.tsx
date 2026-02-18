@@ -318,7 +318,7 @@ function FeedbackPageContent() {
 
   if (!rating) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-[#FDF2FF] via-[#E9F4FF] to-[#FFF9E6] flex flex-col items-center justify-center p-4">
+      <main className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex flex-col items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Invalid Rating</CardTitle>
@@ -337,7 +337,7 @@ function FeedbackPageContent() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#FDF2FF] via-[#E9F4FF] to-[#FFF9E6] p-4 sm:p-6">
+    <main className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] p-4 sm:p-6">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div>
@@ -495,7 +495,7 @@ function FeedbackPageContent() {
 export default function FeedbackPage() {
   return (
     <Suspense fallback={
-      <main className="min-h-screen bg-gradient-to-br from-[#FDF2FF] via-[#E9F4FF] to-[#FFF9E6] flex flex-col items-center justify-center p-4">
+      <main className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex flex-col items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
             <div className="flex flex-col items-center gap-4">
