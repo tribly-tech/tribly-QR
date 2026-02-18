@@ -19,6 +19,10 @@ export type BusinessEditOverrides = Partial<
     | "googleBusinessReviewLink"
     | "googlePlaceId"
     | "socialMediaLink"
+    | "instagramUrl"
+    | "youtubeUrl"
+    | "whatsappNumber"
+    | "whatsappUrl"
     | "autoReplyEnabled"
     | "keywords"
   >
@@ -84,6 +88,14 @@ export function mergeBusinessWithOverrides(
     merged.googlePlaceId = overrides.googlePlaceId;
   if (overrides.socialMediaLink !== undefined)
     merged.socialMediaLink = overrides.socialMediaLink;
+  if (overrides.instagramUrl !== undefined)
+    merged.instagramUrl = overrides.instagramUrl;
+  if (overrides.youtubeUrl !== undefined)
+    merged.youtubeUrl = overrides.youtubeUrl;
+  if (overrides.whatsappNumber !== undefined)
+    merged.whatsappNumber = overrides.whatsappNumber;
+  if (overrides.whatsappUrl !== undefined)
+    merged.whatsappUrl = overrides.whatsappUrl;
   if (overrides.autoReplyEnabled !== undefined)
     merged.autoReplyEnabled = overrides.autoReplyEnabled;
   if (overrides.keywords !== undefined) merged.keywords = overrides.keywords;

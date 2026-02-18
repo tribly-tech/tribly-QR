@@ -13,7 +13,6 @@ import {
   ChevronUp,
   Sparkles,
   ExternalLink,
-  ArrowRight,
   Circle,
 } from "lucide-react";
 
@@ -163,46 +162,42 @@ export function RecommendedActionsTab({ businessName }: RecommendedActionsTabPro
 
   return (
     <div className="space-y-6">
-      {/* Hero: Next step (primary action card) — redesigned */}
+      {/* Hero: Next step (primary action card) */}
       {nextStep && (
-        <Card className="overflow-hidden rounded-2xl border border-border/80 border-l-4 border-l-primary bg-white shadow-sm ring-1 ring-primary/10">
-          <CardContent className="p-0">
-            <div className="p-6 sm:p-7">
-              <div className="flex flex-col sm:flex-row sm:items-start gap-5">
-                <div className="h-14 w-14 shrink-0 rounded-2xl bg-primary/10 flex items-center justify-center ring-1 ring-primary/20">
-                  <Sparkles className="h-7 w-7 text-primary" />
-                </div>
-                <div className="min-w-0 flex-1 space-y-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-primary mb-2">
-                      Your next step
-                    </p>
-                    <h2 className="text-xl font-semibold text-foreground leading-snug mb-2">
-                      {nextStep.item.title}
-                    </h2>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      {nextStep.item.description}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 pt-1">
-                    <Button
-                      size="lg"
-                      className="gap-2 rounded-xl font-semibold shadow-sm"
-                      onClick={() => window.open("https://business.google.com/", "_blank", "noopener,noreferrer")}
-                    >
-                      Open Google Business
-                      <ArrowRight className="h-5 w-5" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="gap-2 text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-lg"
-                      onClick={() => toggleDone(nextStep.id)}
-                    >
-                      <Circle className="h-4 w-4" strokeWidth={2} />
-                      Mark as done
-                    </Button>
-                  </div>
+        <Card className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex gap-4">
+              <div className="h-11 w-11 shrink-0 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Sparkles className="h-5 w-5 text-primary" />
+              </div>
+              <div className="min-w-0 flex-1 space-y-3">
+                <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                  Your next step
+                </p>
+                <h2 className="text-lg font-semibold text-foreground leading-tight">
+                  {nextStep.item.title}
+                </h2>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {nextStep.item.description}
+                </p>
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <Button
+                    variant="outline"
+                    size="default"
+                    className="gap-2 rounded-lg border-primary/50 bg-background font-medium text-primary hover:bg-primary/5 hover:border-primary"
+                    onClick={() => window.open("https://business.google.com/", "_blank", "noopener,noreferrer")}
+                  >
+                    Open Google Business
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => toggleDone(nextStep.id)}
+                    className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Circle className="h-4 w-4 shrink-0" strokeWidth={2} />
+                    Mark as done
+                  </button>
                 </div>
               </div>
             </div>

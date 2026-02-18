@@ -89,22 +89,35 @@ function ManualFeedbackPageContent() {
         throw new Error(errorData.message || "Failed to submit feedback. Please try again.");
       }
 
-      // Get business ID from sessionStorage or URL
-      const codeParam = searchParams.get("code");
+      // Get business ID from sessionStorage (set by review page when code is used)
       const businessId = sessionStorage.getItem("businessId");
 
-      // Get Google Business review link
-      let googleReviewLink = null;
+      // Get Google Business review link and social URLs for thank-you page
+      let googleReviewLink: string | null = null;
+      let business: ReturnType<typeof getBusinessById> = null;
       if (businessId) {
-        const business = getBusinessById(businessId);
-        googleReviewLink = business?.googleBusinessReviewLink;
+        business = getBusinessById(businessId);
+        googleReviewLink = business?.googleBusinessReviewLink ?? null;
       }
 
-      // Redirect to Google Business review if available, otherwise to rating page
+      // Build feedback-submitted URL with social profile params
+      const socialParams = new URLSearchParams();
+      if (business?.instagramUrl) socialParams.set("instagram", business.instagramUrl);
+      if (business?.youtubeUrl) socialParams.set("youtube", business.youtubeUrl);
+      if (business?.whatsappNumber) {
+        const { getWhatsAppLinkWithMessage } = await import("@/lib/whatsapp-utils");
+        socialParams.set("whatsapp", getWhatsAppLinkWithMessage(business.whatsappNumber));
+      } else if (business?.whatsappUrl) socialParams.set("whatsapp", business.whatsappUrl);
+      const feedbackSubmittedQuery = socialParams.toString();
+      const feedbackSubmittedUrl = feedbackSubmittedQuery
+        ? `/feedback-submitted?${feedbackSubmittedQuery}`
+        : "/feedback-submitted";
+
+      // Redirect to Google Business review if available, otherwise to thank-you page
       if (googleReviewLink) {
         window.location.href = googleReviewLink;
       } else {
-        router.push("/rating");
+        router.push(feedbackSubmittedUrl);
       }
     } catch (err) {
       console.error("Error submitting feedback:", err);

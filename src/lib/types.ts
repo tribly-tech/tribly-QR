@@ -47,6 +47,13 @@ export interface Business {
   /** Google Place ID for fetching Google reviews via Places API */
   googlePlaceId?: string;
   socialMediaLink?: string;
+  /** Profile URLs shown on feedback-submitted page */
+  instagramUrl?: string;
+  youtubeUrl?: string;
+  /** WhatsApp number only; link with prefilled message is built from this */
+  whatsappNumber?: string;
+  /** @deprecated Use whatsappNumber; link built via getWhatsAppLinkWithMessage. Kept for API/backward compat. */
+  whatsappUrl?: string;
   // Settings
   feedbackTone: FeedbackTone;
   autoReplyEnabled: boolean;

@@ -248,7 +248,8 @@ function FeedbackPageContent() {
 
   const navigateToReview = async () => {
     const qrId = searchParams.get("qr");
-    let googleReviewLink = null;
+    let googleReviewLink: string | null = null;
+    const socialParams = new URLSearchParams();
 
     // First, try to get from API if qr parameter exists
     if (qrId) {
@@ -258,7 +259,11 @@ function FeedbackPageContent() {
 
         if (response.ok) {
           const apiResponse = await response.json();
-          googleReviewLink = apiResponse.data?.business_google_review_url;
+          const d = apiResponse.data;
+          googleReviewLink = d?.business_google_review_url ?? null;
+          if (d?.instagram_url) socialParams.set("instagram", d.instagram_url);
+          if (d?.youtube_url) socialParams.set("youtube", d.youtube_url);
+          if (d?.whatsapp_url) socialParams.set("whatsapp", d.whatsapp_url);
         }
       } catch (error) {
         console.error("Failed to fetch business QR data:", error);
@@ -271,16 +276,27 @@ function FeedbackPageContent() {
       if (businessId) {
         const { getBusinessById } = await import("@/lib/mock-data");
         const business = getBusinessById(businessId);
-        googleReviewLink = business?.googleBusinessReviewLink;
+        googleReviewLink = business?.googleBusinessReviewLink ?? null;
+        if (business?.instagramUrl) socialParams.set("instagram", business.instagramUrl);
+        if (business?.youtubeUrl) socialParams.set("youtube", business.youtubeUrl);
+        if (business?.whatsappNumber) {
+          const { getWhatsAppLinkWithMessage } = await import("@/lib/whatsapp-utils");
+          socialParams.set("whatsapp", getWhatsAppLinkWithMessage(business.whatsappNumber));
+        } else if (business?.whatsappUrl) socialParams.set("whatsapp", business.whatsappUrl);
       }
     }
 
-    // Navigate to Google Business review if available, otherwise to rating page
+    const feedbackSubmittedQuery = socialParams.toString();
+    const feedbackSubmittedUrl = feedbackSubmittedQuery
+      ? `/feedback-submitted?${feedbackSubmittedQuery}`
+      : "/feedback-submitted";
+
+    // Navigate to Google Business review if available, otherwise to thank-you page
     setTimeout(() => {
       if (googleReviewLink) {
         window.location.href = googleReviewLink;
       } else {
-        router.push("/rating");
+        router.push(feedbackSubmittedUrl);
       }
     }, 500);
   };

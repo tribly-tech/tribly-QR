@@ -11,10 +11,11 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { mockBusinesses, getReviewsByBusinessId } from "@/lib/mock-data";
 import { Business, BusinessCategory, ReviewCategory, Review } from "@/lib/types";
 import { generateShortUrlCode, generateReviewUrl, generateQRCodeDataUrl, downloadQRCodeAsPNG } from "@/lib/qr-utils";
+import { getWhatsAppLinkWithMessage, parseWhatsAppNumberFromUrl } from "@/lib/whatsapp-utils";
 import { getBusinessBySlug } from "@/lib/business-slug";
 import {
   getBusinessEditOverrides,
@@ -72,6 +73,7 @@ import {
   ChevronDown,
   Share2,
   Receipt,
+  Building2,
 } from "lucide-react";
 
 const DEFAULT_TAB: (typeof BUSINESS_MAIN_TABS)[number] = "overview";
@@ -138,6 +140,12 @@ export default function BusinessDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadRetryKey, setLoadRetryKey] = useState(0);
   const [qrCodeError, setQrCodeError] = useState<string | null>(null);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const [pendingLeaveAction, setPendingLeaveAction] = useState<{
+    type: "main-tab" | "settings-sub" | "route";
+    value?: string;
+    url?: string;
+  } | null>(null);
 
   // Last-saved snapshots for change detection
   const lastSavedRef = useRef<{
@@ -174,7 +182,18 @@ export default function BusinessDetailPage() {
     }
   }, [searchParams, pathname, router]);
 
+  // Ref to read current settings unsaved state when handling tab change (avoids stale closure)
+  const settingsUnsavedRef = useRef<{ hasChanges: boolean; sectionKey: string | null }>({
+    hasChanges: false,
+    sectionKey: null,
+  });
+
   const handleMainTabChange = (value: string) => {
+    if (activeTab === "settings" && settingsUnsavedRef.current.hasChanges) {
+      setPendingLeaveAction({ type: "main-tab", value });
+      setLeaveConfirmOpen(true);
+      return;
+    }
     const next = new URLSearchParams(searchParams?.toString() ?? "");
     next.set("tab", value);
     if (value === "settings") {
@@ -187,10 +206,47 @@ export default function BusinessDetailPage() {
   };
 
   const handleSettingsSubChange = (value: string) => {
+    if (settingsUnsavedRef.current.hasChanges) {
+      setPendingLeaveAction({ type: "settings-sub", value });
+      setLeaveConfirmOpen(true);
+      return;
+    }
     const next = new URLSearchParams(searchParams?.toString() ?? "");
     next.set("tab", "settings");
     next.set("sub", value);
     router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  };
+
+  const performPendingLeave = () => {
+    if (!pendingLeaveAction) return;
+    if (pendingLeaveAction.type === "main-tab" && pendingLeaveAction.value !== undefined) {
+      const next = new URLSearchParams(searchParams?.toString() ?? "");
+      next.set("tab", pendingLeaveAction.value);
+      if (pendingLeaveAction.value === "settings") {
+        if (!next.has("sub")) next.set("sub", DEFAULT_SETTINGS_SUB);
+      } else {
+        next.delete("sub");
+      }
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    } else if (pendingLeaveAction.type === "settings-sub" && pendingLeaveAction.value !== undefined) {
+      const next = new URLSearchParams(searchParams?.toString() ?? "");
+      next.set("tab", "settings");
+      next.set("sub", pendingLeaveAction.value);
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    } else if (pendingLeaveAction.type === "route" && pendingLeaveAction.url) {
+      router.push(pendingLeaveAction.url);
+    }
+    setPendingLeaveAction(null);
+    setLeaveConfirmOpen(false);
+  };
+
+  const handleLeaveConfirmSave = async () => {
+    const sectionKey = settingsUnsavedRef.current.sectionKey;
+    if (sectionKey) {
+      await handleSectionSave(sectionKey);
+    }
+    performPendingLeave();
   };
 
   const staticServiceSuggestions = useMemo(() => {
@@ -308,6 +364,10 @@ export default function BusinessDetailPage() {
             reviewUrl: normalizedReviewUrl,
             googleBusinessReviewLink: qrData.business_google_review_url || "",
             googlePlaceId: qrData.google_place_id || qrData.place_id || undefined,
+            instagramUrl: qrData.instagram_url || undefined,
+            youtubeUrl: qrData.youtube_url || undefined,
+            whatsappNumber: parseWhatsAppNumberFromUrl(qrData.whatsapp_url || "") || undefined,
+            whatsappUrl: qrData.whatsapp_url || undefined,
             keywords: Array.isArray(qrData.business_tags) ? qrData.business_tags : [],
             feedbackTone: "professional",
             autoReplyEnabled: false,
@@ -426,7 +486,9 @@ export default function BusinessDetailPage() {
         links: {
           googleBusinessReviewLink: business.googleBusinessReviewLink || "",
           googlePlaceId: business.googlePlaceId ?? "",
-          socialMediaLink: business.socialMediaLink || "",
+          instagramUrl: business.instagramUrl || "",
+          youtubeUrl: business.youtubeUrl || "",
+          whatsappNumber: business.whatsappNumber || "",
           website,
         },
         autoReply: { autoReplyEnabled: business.autoReplyEnabled },
@@ -841,7 +903,9 @@ export default function BusinessDetailPage() {
     return (
       s.googleBusinessReviewLink !== (business.googleBusinessReviewLink || "") ||
       s.googlePlaceId !== (business.googlePlaceId ?? "") ||
-      s.socialMediaLink !== (business.socialMediaLink || "") ||
+      s.instagramUrl !== (business.instagramUrl || "") ||
+      s.youtubeUrl !== (business.youtubeUrl || "") ||
+      s.whatsappNumber !== (business.whatsappNumber || "") ||
       s.website !== website
     );
   }, [business, website]);
@@ -860,6 +924,53 @@ export default function BusinessDetailPage() {
     const b = [...cur].sort();
     return a.some((v, i) => v !== b[i]);
   }, [business]);
+
+  // Settings save state (must be useMemo so hooks below run unconditionally)
+  const settingsSaveState = useMemo(() => {
+    let sectionKey: string | null = null;
+    let label = "Save changes";
+    let hasChanges = false;
+    if (settingsSubTab === "business-info") {
+      sectionKey = "Business information";
+      label = "Save business information";
+      hasChanges = hasBusinessInfoChanges;
+    } else if (settingsSubTab === "keywords") {
+      sectionKey = "Keywords";
+      label = "Save keywords";
+      hasChanges = hasKeywordsChanges;
+    } else if (settingsSubTab === "links") {
+      sectionKey = "Business links";
+      label = "Save links";
+      hasChanges = hasLinksChanges;
+    } else if (settingsSubTab === "auto-reply") {
+      sectionKey = "Auto-reply settings";
+      label = "Save auto-reply settings";
+      hasChanges = hasAutoReplyChanges;
+    }
+    return { settingsSaveSectionKey: sectionKey, settingsSaveLabel: label, settingsHasChanges: hasChanges };
+  }, [settingsSubTab, hasBusinessInfoChanges, hasKeywordsChanges, hasLinksChanges, hasAutoReplyChanges]);
+
+  // Keep ref in sync so tab-change handlers see current unsaved state (must run before any return)
+  useEffect(() => {
+    if (activeTab === "settings") {
+      settingsUnsavedRef.current = {
+        hasChanges: settingsSaveState.settingsHasChanges,
+        sectionKey: settingsSaveState.settingsSaveSectionKey,
+      };
+    } else {
+      settingsUnsavedRef.current = { hasChanges: false, sectionKey: null };
+    }
+  }, [activeTab, settingsSaveState.settingsHasChanges, settingsSaveState.settingsSaveSectionKey]);
+
+  // Browser beforeunload when leaving page with unsaved settings (must run before any return)
+  useEffect(() => {
+    if (activeTab !== "settings" || !settingsSaveState.settingsHasChanges) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [activeTab, settingsSaveState.settingsHasChanges]);
 
   const updateLastSaved = (section: string) => {
     if (!business) return;
@@ -881,7 +992,9 @@ export default function BusinessDetailPage() {
       r.links = {
         googleBusinessReviewLink: business.googleBusinessReviewLink || "",
         googlePlaceId: business.googlePlaceId ?? "",
-        socialMediaLink: business.socialMediaLink || "",
+        instagramUrl: business.instagramUrl || "",
+        youtubeUrl: business.youtubeUrl || "",
+        whatsappNumber: business.whatsappNumber || "",
         website,
       };
     } else if (section === "Auto-reply settings") {
@@ -909,6 +1022,9 @@ export default function BusinessDetailPage() {
           category: business.category || null,
           business_category: business.category || null, // Some APIs expect snake_case
           google_review_url: business.googleBusinessReviewLink || null,
+          instagram_url: business.instagramUrl || null,
+          youtube_url: business.youtubeUrl || null,
+          whatsapp_url: getWhatsAppLinkWithMessage(business.whatsappNumber || "") || null,
           business_id: businessSlug,
           tags: business.keywords || [],
           services: business.services && business.services.length > 0 ? business.services : [],
@@ -972,6 +1088,16 @@ export default function BusinessDetailPage() {
             services: business.services,
           });
         }
+        if (section === "Business links" || isAutosave) {
+          updateBusinessEditOverrides(businessSlug, {
+            googleBusinessReviewLink: business.googleBusinessReviewLink,
+            googlePlaceId: business.googlePlaceId,
+            instagramUrl: business.instagramUrl,
+            youtubeUrl: business.youtubeUrl,
+            whatsappNumber: business.whatsappNumber,
+            website,
+          });
+        }
         // Refetch to get latest from server (e.g. pincode persisted correctly)
         try {
           const refetchRes = await fetch(
@@ -999,6 +1125,10 @@ export default function BusinessDetailPage() {
                       googleBusinessReviewLink:
                         d.business_google_review_url ??
                         prev.googleBusinessReviewLink,
+                      instagramUrl: d.instagram_url ?? prev.instagramUrl,
+                      youtubeUrl: d.youtube_url ?? prev.youtubeUrl,
+                      whatsappNumber: parseWhatsAppNumberFromUrl(d.whatsapp_url ?? "") ?? prev.whatsappNumber,
+                      whatsappUrl: d.whatsapp_url ?? prev.whatsappUrl,
                       keywords: Array.isArray(d.business_tags)
                         ? d.business_tags
                         : prev.keywords,
@@ -1039,7 +1169,9 @@ export default function BusinessDetailPage() {
         services: business.services,
         googleBusinessReviewLink: business.googleBusinessReviewLink,
         googlePlaceId: business.googlePlaceId,
-        socialMediaLink: business.socialMediaLink,
+        instagramUrl: business.instagramUrl,
+        youtubeUrl: business.youtubeUrl,
+        whatsappNumber: business.whatsappNumber,
         website,
         autoReplyEnabled: business.autoReplyEnabled,
         keywords: business.keywords,
@@ -1217,27 +1349,7 @@ export default function BusinessDetailPage() {
 
   const isOnSettingsTab = activeTab === "settings";
 
-  let settingsSaveSectionKey: string | null = null;
-  let settingsSaveLabel = "Save changes";
-  let settingsHasChanges = false;
-
-  if (settingsSubTab === "business-info") {
-    settingsSaveSectionKey = "Business information";
-    settingsSaveLabel = "Save business information";
-    settingsHasChanges = hasBusinessInfoChanges;
-  } else if (settingsSubTab === "keywords") {
-    settingsSaveSectionKey = "Keywords";
-    settingsSaveLabel = "Save keywords";
-    settingsHasChanges = hasKeywordsChanges;
-  } else if (settingsSubTab === "links") {
-    settingsSaveSectionKey = "Business links";
-    settingsSaveLabel = "Save links";
-    settingsHasChanges = hasLinksChanges;
-  } else if (settingsSubTab === "auto-reply") {
-    settingsSaveSectionKey = "Auto-reply settings";
-    settingsSaveLabel = "Save auto-reply settings";
-    settingsHasChanges = hasAutoReplyChanges;
-  }
+  const { settingsSaveSectionKey, settingsSaveLabel, settingsHasChanges } = settingsSaveState;
 
   const isSettingsSectionSaving =
     !!settingsSaveSectionKey && savingSection === settingsSaveSectionKey;
@@ -1245,20 +1357,98 @@ export default function BusinessDetailPage() {
   const settingsSaveDisabled =
     !settingsSaveSectionKey || !settingsHasChanges || isSettingsSectionSaving;
 
+  const handleBackClick = () => {
+    if (activeTab === "settings" && settingsUnsavedRef.current.hasChanges) {
+      setPendingLeaveAction({ type: "route", url: "/dashboard/admin" });
+      setLeaveConfirmOpen(true);
+      return;
+    }
+    router.push("/dashboard/admin");
+  };
+
+  const discardSettingsChanges = () => {
+    const r = lastSavedRef.current;
+    if (!business) return;
+    setBusiness((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        ...(r.businessInfo && {
+          name: r.businessInfo.name as string,
+          category: r.businessInfo.category as BusinessCategory,
+          email: r.businessInfo.email as string,
+          phone: (r.businessInfo.phone as string) ?? prev.phone,
+          address: (r.businessInfo.address as string) ?? prev.address,
+          city: (r.businessInfo.city as string) ?? prev.city,
+          area: (r.businessInfo.area as string) ?? prev.area,
+          pincode: (r.businessInfo.pincode as string) ?? prev.pincode,
+          overview: (r.businessInfo.overview as string) ?? prev.overview,
+          services: (r.businessInfo.services as string[]) ?? prev.services,
+        }),
+        ...(r.links && {
+          googleBusinessReviewLink: r.links.googleBusinessReviewLink ?? prev.googleBusinessReviewLink,
+          googlePlaceId: r.links.googlePlaceId ?? prev.googlePlaceId,
+          instagramUrl: r.links.instagramUrl ?? prev.instagramUrl,
+          youtubeUrl: r.links.youtubeUrl ?? prev.youtubeUrl,
+          whatsappNumber: r.links.whatsappNumber ?? prev.whatsappNumber,
+        }),
+        ...(r.autoReply && { autoReplyEnabled: r.autoReply.autoReplyEnabled }),
+        ...(r.keywords && { keywords: (r.keywords as string[]) ?? prev.keywords }),
+      };
+    });
+    if (r.links && typeof r.links.website === "string") setWebsite(r.links.website);
+  };
+
+  const handleLeaveWithoutSaving = () => {
+    discardSettingsChanges();
+    performPendingLeave();
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF]">
+      {/* Leave with unsaved changes confirmation */}
+      <Dialog open={leaveConfirmOpen} onOpenChange={(open) => {
+        if (!open) {
+          setLeaveConfirmOpen(false);
+          setPendingLeaveAction(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>Unsaved changes</DialogTitle>
+            <DialogDescription>
+              You have unsaved changes. Save your changes before leaving, or leave without saving?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={handleLeaveWithoutSaving}
+            >
+              Leave without saving
+            </Button>
+            <Button
+              onClick={handleLeaveConfirmSave}
+              disabled={!settingsSaveSectionKey || settingsSaveDisabled}
+            >
+              {isSettingsSectionSaving ? "Saving..." : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="container mx-auto max-w-7xl px-3 pb-[calc(88px+env(safe-area-inset-bottom))] pt-3 md:px-4 md:py-8">
         {/* Desktop Header */}
         <div className="mb-6 hidden md:block">
           {!isBusinessOwner && currentUser?.userType !== "business_qr_user" && (
           <Button
-            variant="ghost"
-            onClick={() => router.push("/dashboard/admin")}
-            className="mb-4 gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Dashboard
-          </Button>
+                variant="ghost"
+                onClick={handleBackClick}
+                className="mb-4 gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Dashboard
+              </Button>
           )}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex items-center gap-3">
@@ -1297,7 +1487,7 @@ export default function BusinessDetailPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => router.push("/dashboard/admin")}
+                    onClick={handleBackClick}
                     className="h-9 w-9 rounded-full text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/60"
                     aria-label="Back to dashboard"
                   >
@@ -1430,7 +1620,7 @@ export default function BusinessDetailPage() {
                       value="business-info"
                       className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-medium transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
                     >
-                      <LayoutDashboard className="h-4 w-4 shrink-0" />
+                      <Building2 className="h-4 w-4 shrink-0" />
                       <span>Business Info</span>
                     </TabsTrigger>
                     <TabsTrigger
@@ -1470,7 +1660,7 @@ export default function BusinessDetailPage() {
                       value="business-info"
                       className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/60 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/60 data-[state=inactive]:hover:text-foreground"
                     >
-                      <LayoutDashboard className="h-5 w-5 shrink-0" />
+                      <Building2 className="h-5 w-5 shrink-0" />
                       <span className="whitespace-nowrap">Business Info</span>
                     </TabsTrigger>
                     <TabsTrigger
@@ -2129,19 +2319,20 @@ export default function BusinessDetailPage() {
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label>Social Media Link</Label>
+                  <Label>Instagram Profile URL</Label>
                   <div className="flex gap-2">
                     <Input
-                      value={business.socialMediaLink || ""}
-                      onChange={(e) => handleUpdateBusiness({ socialMediaLink: e.target.value })}
-                      placeholder="https://facebook.com/your-business or https://instagram.com/your-business"
+                      value={business.instagramUrl || ""}
+                      onChange={(e) => handleUpdateBusiness({ instagramUrl: e.target.value.trim() || undefined })}
+                      placeholder="https://instagram.com/your-business"
                     />
-                    {business.socialMediaLink && (
+                    {business.instagramUrl && (
                       <>
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={() => copyToClipboard(business.socialMediaLink!)}
+                          className="rounded-xl bg-white border border-input hover:bg-muted/50"
+                          onClick={() => copyToClipboard(business.instagramUrl!)}
                           title="Copy link"
                         >
                           <Copy className="h-4 w-4" />
@@ -2149,7 +2340,8 @@ export default function BusinessDetailPage() {
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={() => window.open(business.socialMediaLink, "_blank")}
+                          className="rounded-xl bg-white border border-input hover:bg-muted/50"
+                          onClick={() => window.open(business.instagramUrl, "_blank")}
                           title="Open link"
                         >
                           <ExternalLink className="h-4 w-4" />
@@ -2158,7 +2350,83 @@ export default function BusinessDetailPage() {
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Optional: Add your social media profile link (Facebook, Instagram, Twitter, etc.)
+                    Shown on the thank-you page after feedback. Customers can follow your profile.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>YouTube Channel URL</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={business.youtubeUrl || ""}
+                      onChange={(e) => handleUpdateBusiness({ youtubeUrl: e.target.value.trim() || undefined })}
+                      placeholder="https://youtube.com/@your-channel"
+                    />
+                    {business.youtubeUrl && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="rounded-xl bg-white border border-input hover:bg-muted/50"
+                          onClick={() => copyToClipboard(business.youtubeUrl!)}
+                          title="Copy link"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="rounded-xl bg-white border border-input hover:bg-muted/50"
+                          onClick={() => window.open(business.youtubeUrl, "_blank")}
+                          title="Open link"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Shown on the thank-you page. Customers can subscribe to your channel.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Business WhatsApp Number</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={business.whatsappNumber ?? ""}
+                      onChange={(e) => handleUpdateBusiness({ whatsappNumber: e.target.value.trim() || undefined })}
+                      placeholder="e.g. 919876543210 or +91 98765 43210"
+                    />
+                    {business.whatsappNumber && (
+                      (() => {
+                        const whatsappLink = getWhatsAppLinkWithMessage(business.whatsappNumber!);
+                        if (!whatsappLink) return null;
+                        return (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="rounded-xl bg-white border border-input hover:bg-muted/50"
+                              onClick={() => copyToClipboard(whatsappLink)}
+                              title="Copy link"
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="rounded-xl bg-white border border-input hover:bg-muted/50"
+                              onClick={() => window.open(whatsappLink, "_blank")}
+                              title="Open link"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </Button>
+                          </>
+                        );
+                      })()
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Shown on the thank-you page. Link is created with prefilled message: &quot;Keep me updated with offers, rewards, and important messages on WhatsApp.&quot;
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -2197,6 +2465,7 @@ export default function BusinessDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
           </TabsContent>
               <TabsContent value="auto-reply" className="mt-5 space-y-6">
             <Card>
@@ -2271,8 +2540,31 @@ export default function BusinessDetailPage() {
                 <Separator />
               </CardContent>
             </Card>
-          </TabsContent>
+            </TabsContent>
             </Tabs>
+
+            {settingsSaveSectionKey && (
+              <div className="sticky bottom-0 z-40 mt-6 -mb-3 md:-mb-8">
+                <div className="border-t border-border bg-background/95 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:py-4 flex items-center justify-between gap-3 px-6 rounded-t-xl">
+                  <p className="hidden text-xs text-muted-foreground sm:block">
+                    {settingsHasChanges
+                      ? "You have unsaved changes in Settings."
+                      : "All changes are saved."}
+                  </p>
+                  <Button
+                    size="sm"
+                    className="ml-auto min-w-[150px]"
+                    disabled={settingsSaveDisabled}
+                    onClick={() => {
+                      if (!settingsSaveSectionKey || settingsSaveDisabled) return;
+                      void handleSectionSave(settingsSaveSectionKey);
+                    }}
+                  >
+                    {isSettingsSectionSaving ? "Saving..." : settingsSaveLabel}
+                  </Button>
+                </div>
+              </div>
+            )}
           </TabsContent>
 
           {/* Google Business Health Tab */}
@@ -2330,29 +2622,6 @@ export default function BusinessDetailPage() {
             </div>
           </div>
         </Tabs>
-
-        {isOnSettingsTab && settingsSaveSectionKey && (
-          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 px-3 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:px-4 md:py-4">
-            <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-              <p className="hidden text-xs text-muted-foreground sm:block">
-                {settingsHasChanges
-                  ? "You have unsaved changes in Settings."
-                  : "All changes are saved."}
-              </p>
-              <Button
-                size="sm"
-                className="ml-auto min-w-[150px]"
-                disabled={settingsSaveDisabled}
-                onClick={() => {
-                  if (!settingsSaveSectionKey || settingsSaveDisabled) return;
-                  void handleSectionSave(settingsSaveSectionKey);
-                }}
-              >
-                {isSettingsSectionSaving ? "Saving..." : settingsSaveLabel}
-              </Button>
-            </div>
-          </div>
-        )}
 
         {/* Footer */}
         <footer className="mt-12 hidden border-t border-border/60 pt-8 md:block md:mt-[120px]">
