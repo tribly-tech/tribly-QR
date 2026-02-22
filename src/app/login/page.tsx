@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { getStoredUser, setStoredUser, setAuthToken } from "@/lib/auth";
 import { generateBusinessSlug } from "@/lib/business-slug";
 import { getBusinessById } from "@/lib/mock-data";
+import { loginViaAppRoute } from "@/services/api/auth";
 import { LogIn, Mail, Lock, AlertCircle } from "lucide-react";
 
 function LoginPageContent() {
@@ -62,37 +63,46 @@ function LoginPageContent() {
     setIsLoading(true);
 
     try {
-      // Trim email input
       const trimmedEmail = email.trim();
+      const result = await loginViaAppRoute(trimmedEmail, password);
 
-      // Call the login API
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
-      const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: trimmedEmail,
-          password: password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || data.status !== "success") {
-        setError(data.message || "Login failed. Please try again.");
+      if (!result.ok) {
+        const message =
+          (result.error as { message?: string })?.message ||
+          "Login failed. Please try again.";
+        setError(message);
         setIsLoading(false);
         return;
       }
 
-      // Store the token
-      if (data.data?.token) {
-        setAuthToken(data.data.token);
+      const data = result.data;
+      if (data?.status !== "success") {
+        setError(data?.message || "Login failed. Please try again.");
+        setIsLoading(false);
+        return;
+      }
+
+      const userData = data.data;
+      if (!userData) {
+        setError("Login failed. Please try again.");
+        setIsLoading(false);
+        return;
+      }
+
+      if (userData.requires_password_reset && userData.token) {
+        const params = new URLSearchParams({
+          token: userData.token,
+          email: userData.email || trimmedEmail,
+        });
+        router.push(`/reset-password?${params.toString()}`);
+        return;
+      }
+
+      if (userData.token) {
+        setAuthToken(userData.token);
       }
 
       // Create user object from API response
-      const userData = data.data;
 
       // Determine role based on user_type from API (case-insensitive)
       let userRole: "admin" | "sales-team" | "business" = "business";

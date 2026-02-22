@@ -29,10 +29,19 @@ import {
   Unplug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { calculateGBPScore } from "@/components/sales-dashboard";
-import type { GBPAnalysisData } from "@/components/sales-dashboard/types";
+import { getAuthToken } from "@/lib/auth";
 
 type TimeRange = "Week" | "Month" | "Quarterly" | "Half-yearly" | "Yearly";
+
+type PerformanceFilter = "weekly" | "monthly" | "quarterly" | "half_yearly" | "yearly";
+
+const TIME_RANGE_TO_FILTER: Record<TimeRange, PerformanceFilter> = {
+  Week: "weekly",
+  Month: "monthly",
+  Quarterly: "quarterly",
+  "Half-yearly": "half_yearly",
+  Yearly: "yearly",
+};
 type PlatformStatus = "connected" | "not_connected" | "reconnect" | "syncing";
 
 interface PlatformMetric {
@@ -377,17 +386,70 @@ function emptyGbpData(): GbpData {
   };
 }
 
-/**
- * Map Google Business Health tab data (GBPAnalysisData) to Overview GBP section shape.
- * Only existing section fields are filled; no new fields. Missing data → blank.
- */
-function mapGBPAnalysisToGbpData(analysis: GBPAnalysisData): GbpData {
-  const formatNum = (n: number | undefined | null): string =>
-    n != null && Number.isFinite(n) ? String(n) : BLANK;
-  const rating =
-    analysis.rating != null && Number.isFinite(analysis.rating)
-      ? analysis.rating.toFixed(1)
-      : BLANK;
+/* eslint-disable @typescript-eslint/no-explicit-any */
+interface GrowthInfo {
+  value: number;
+  previous_value: number;
+  growth_pct: number | null;
+  growth_direction: "up" | "down" | "flat";
+}
+
+interface PerformanceMetricsResponse {
+  success: boolean;
+  filter: string;
+  period: Record<string, { start: string; end: string }>;
+  overall_engagement_growth: {
+    growth_pct: number | null;
+    growth_direction: "up" | "down" | "flat";
+  };
+  discovery: {
+    searches: GrowthInfo;
+    search_views: GrowthInfo;
+    maps_views: GrowthInfo;
+  };
+  customer_actions: {
+    calls: GrowthInfo;
+    directions: GrowthInfo;
+    website_clicks: GrowthInfo;
+  };
+  engagement: {
+    reviews: number;
+    avg_rating: number;
+  };
+  trend: Array<{
+    date: string;
+    total_impressions: number;
+    total_actions: number;
+  }>;
+}
+
+function formatGrowthMetric(info: GrowthInfo): PlatformMetric & { label: string } {
+  const fmtNum = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n));
+  const delta =
+    info.growth_pct != null
+      ? `${info.growth_pct >= 0 ? "+" : ""}${info.growth_pct.toFixed(1)}%`
+      : undefined;
+  return { label: "", value: fmtNum(info.value), delta };
+}
+
+function mapPerformanceToGbpData(data: PerformanceMetricsResponse): GbpData {
+  const searches = formatGrowthMetric(data.discovery.searches);
+  const searchViews = formatGrowthMetric(data.discovery.search_views);
+  const mapsViews = formatGrowthMetric(data.discovery.maps_views);
+  const calls = formatGrowthMetric(data.customer_actions.calls);
+  const directions = formatGrowthMetric(data.customer_actions.directions);
+  const websiteClicks = formatGrowthMetric(data.customer_actions.website_clicks);
+
+  const overallGrowth = data.overall_engagement_growth.growth_pct ?? 0;
+
+  const periodInfo = data.period?.current;
+  const lastSyncLabel = periodInfo
+    ? `${periodInfo.start} – ${periodInfo.end}`
+    : BLANK;
+
+  const trendValues = (data.trend ?? []).map(
+    (t) => (t.total_impressions ?? 0) + (t.total_actions ?? 0)
+  );
 
   return {
     name: "Google Business Profile",
@@ -399,30 +461,32 @@ function mapGBPAnalysisToGbpData(analysis: GBPAnalysisData): GbpData {
       />
     ),
     status: "connected",
-    lastSync: BLANK,
-    engagementGrowth: 0,
-    miniChart: [],
+    lastSync: lastSyncLabel,
+    engagementGrowth: overallGrowth,
+    miniChart: trendValues,
     primaryMetrics: [
-      { label: "Searches", value: BLANK },
-      { label: "Calls", value: BLANK },
-      { label: "Directions", value: BLANK },
-      { label: "Website clicks", value: BLANK },
+      { label: "Searches", value: searches.value, delta: searches.delta },
+      { label: "Calls", value: calls.value, delta: calls.delta },
+      { label: "Directions", value: directions.value, delta: directions.delta },
+      { label: "Website clicks", value: websiteClicks.value, delta: websiteClicks.delta },
     ],
     secondaryMetrics: [
-      { label: "Search views", value: BLANK },
-      { label: "Maps views", value: BLANK },
-      { label: "Reviews", value: formatNum(analysis.reviewCount) },
-      { label: "Avg rating", value: rating },
-      { label: "Photo views", value: formatNum(analysis.photoCount) },
+      { label: "Search views", value: searchViews.value, delta: searchViews.delta },
+      { label: "Maps views", value: mapsViews.value, delta: mapsViews.delta },
+      { label: "Reviews", value: String(data.engagement.reviews ?? 0) },
+      {
+        label: "Avg rating",
+        value:
+          data.engagement.avg_rating != null && data.engagement.avg_rating > 0
+            ? data.engagement.avg_rating.toFixed(1)
+            : BLANK,
+      },
+      { label: "Photo views", value: BLANK },
     ],
-    highlights: (analysis.insights ?? [])
-      .slice(0, 5)
-      .map((i) => (i.issue ? `${i.issue} ${i.action ?? ""}`.trim() : ""))
-      .filter(Boolean),
+    highlights: [],
   };
 }
-
-const buildInitialGbp = (businessName: string): GbpData => emptyGbpData();
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 const buildInitialSocialPlatforms = (businessName: string): SocialPlatformData[] => [
   {
@@ -487,15 +551,12 @@ const DEFAULT_BUSINESS_NAME = "Your business";
 
 const DISCONNECT_SIMULATE_MS = 800;
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
-
 export function OverviewTab({ businessName, businessId, isLoading = false, error = null, onViewGbpReport }: OverviewTabProps) {
   const name = businessName?.trim() || DEFAULT_BUSINESS_NAME;
   const [timeRange, setTimeRange] = useState<TimeRange>("Month");
   const [gbp, setGbp] = useState<GbpData>(() => emptyGbpData());
   const [gbpLoading, setGbpLoading] = useState(true);
   const [gbpError, setGbpError] = useState<string | null>(null);
-  const gbpFromApiRef = useRef(false);
   const [socialPlatforms, setSocialPlatforms] = useState<SocialPlatformData[]>(() =>
     buildInitialSocialPlatforms(name)
   );
@@ -515,42 +576,62 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
     el.scrollBy({ left: direction === "left" ? -step : step, behavior: "smooth" });
   };
 
-  // Fetch GBP data
+  // Fetch GBP performance metrics from backend
   useEffect(() => {
-    if (!businessName?.trim()) {
+    if (!businessId) {
       setGbp(emptyGbpData());
       setGbpLoading(false);
-      setGbpError("Business name is required");
-      gbpFromApiRef.current = false;
+      setGbpError("Business ID is required");
       return;
     }
     let cancelled = false;
     setGbpLoading(true);
     setGbpError(null);
-    gbpFromApiRef.current = false;
-    calculateGBPScore(businessName.trim(), null)
-      .then((result) => {
+
+    const filter = TIME_RANGE_TO_FILTER[timeRange];
+    const authToken = getAuthToken();
+    const headers: HeadersInit = {};
+    if (authToken) {
+      headers["Authorization"] = `Bearer ${authToken}`;
+    }
+
+    fetch(
+      `/api/business/${encodeURIComponent(businessId)}/metrics?filter=${filter}`,
+      { headers }
+    )
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(
+            (body as { detail?: string; message?: string }).detail ??
+              (body as { message?: string }).message ??
+              "Failed to load performance data"
+          );
+        }
+        return res.json() as Promise<PerformanceMetricsResponse>;
+      })
+      .then((data) => {
         if (cancelled) return;
-        setGbp(mapGBPAnalysisToGbpData(result.analysisData));
+        setGbp(mapPerformanceToGbpData(data));
+        setLastSynced(new Date());
         setGbpError(null);
-        gbpFromApiRef.current = true;
       })
       .catch((err) => {
         if (cancelled) return;
         setGbp(emptyGbpData());
         setGbpError(err instanceof Error ? err.message : "Failed to load GBP data");
-        gbpFromApiRef.current = false;
       })
       .finally(() => {
         if (!cancelled) setGbpLoading(false);
       });
     return () => { cancelled = true; };
-  }, [businessName]);
+  }, [businessId, timeRange]);
 
   // When real social platform metrics are available from the API,
   // this state can be hydrated from the backend instead of mocks.
 
-  const filteredGbp = useMemo(() => applyTimeRangeToGbp(gbp, timeRange), [gbp, timeRange]);
+  // GBP data is fetched per time range from the API — no client-side scaling needed.
+  const filteredGbp = gbp;
   const filteredSocialPlatforms = useMemo(
     () => (Array.isArray(socialPlatforms) ? socialPlatforms : []).map((p) => applyTimeRangeToPlatform(p, timeRange)),
     [socialPlatforms, timeRange]
@@ -597,7 +678,8 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
   const clearPlatformError = (key: string) => setPlatformActionError((prev) => ({ ...prev, [key]: null }));
 
   const getPlatformAuthUrl = (platformKey: string): string => {
-    const base = `${API_BASE}/dashboard/v1/connect/${platformKey}`;
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+    const base = `${apiBase}/dashboard/v1/connect/${platformKey}`;
     const params = new URLSearchParams();
     if (businessId) params.set("business_id", businessId);
     const qs = params.toString();
