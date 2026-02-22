@@ -1702,16 +1702,18 @@ export default function BusinessDetailPage() {
                     <div className="grid gap-4">
                       <div className="grid gap-2">
                         <Label htmlFor="business-name">
-                          Business Name <span className="text-destructive">*</span>
+                          Business Name
                         </Label>
                         <Input
                           id="business-name"
                           placeholder="e.g., The Coffee House"
                           value={business.name}
-                          onChange={(e) => handleUpdateBusiness({ name: e.target.value })}
+                          readOnly
+                          disabled
+                          className="bg-muted cursor-not-allowed"
                         />
                         <p className="text-xs text-muted-foreground">
-                          Enter the official business name as it appears on legal documents
+                          Business name cannot be changed after registration
                         </p>
                       </div>
 
