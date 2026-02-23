@@ -100,6 +100,9 @@ function AnalysisReportContent() {
   const [pollCount, setPollCount] = useState(0);
   const [authCompletedBusinessReviewUrl, setAuthCompletedBusinessReviewUrl] =
     useState<string | null>(null);
+  const [authCompletedBusinessEmail, setAuthCompletedBusinessEmail] = useState<
+    string | null
+  >(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -243,6 +246,10 @@ function AnalysisReportContent() {
             data.data?.business_review_url || data.business_review_url;
           if (reviewUrl) {
             setAuthCompletedBusinessReviewUrl(reviewUrl);
+          }
+          const businessEmail = data.data?.business_email || data.business_email;
+          if (businessEmail) {
+            setAuthCompletedBusinessEmail(businessEmail);
           }
           sessionStorage.setItem(
             `gbp_connected_${placeDetails?.place_id || businessName}`,
@@ -511,10 +518,7 @@ This secure link will allow Tribly to help improve your online presence.`;
     // Map place types to category
     const category = mapTypesToCategory(placeDetails?.types);
 
-    // Generate email from business name
-    const emailDomain =
-      name.toLowerCase().replace(/[^a-z0-9]/g, "") || "business";
-    const email = `contact@${emailDomain}.com`;
+    const email = authCompletedBusinessEmail ?? "";
 
     // Generate overview from real data
     const ratingText = gbpAnalysisData.rating
