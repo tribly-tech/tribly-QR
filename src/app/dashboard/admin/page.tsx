@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { mockBusinesses } from "@/lib/mock-data";
 import { Business, BusinessStatus, BusinessCategory, UserRole } from "@/lib/types";
 import { logout, setStoredUser, getStoredUser, getAuthToken } from "@/lib/auth";
 import {
@@ -27,21 +26,96 @@ import {
   Phone,
   MapPin,
   UserCircle,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
+
+// Debounce hook for search input
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
+interface FilterOptions {
+  categories: string[];
+  cities: string[];
+  areas: string[];
+  onboarded_by: string[];
+}
+
+interface PaginatedResponse {
+  data: any[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+  filter_options: FilterOptions;
+}
 
 export default function AdminDashboardPage() {
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<BusinessCategory | "all">("all");
-  const [cityFilter, setCityFilter] = useState<string>("all");
-  const [areaFilter, setAreaFilter] = useState<string>("all");
-  const [onboardedByFilter, setOnboardedByFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<BusinessStatus | "due-date" | "pending" | "all">("all");
+  const searchParams = useSearchParams();
+  
+  // Initialize state from URL params
+  const [searchInput, setSearchInput] = useState(searchParams.get("search") || "");
+  const [categoryFilter, setCategoryFilter] = useState<BusinessCategory | "all">(
+    (searchParams.get("category") as BusinessCategory) || "all"
+  );
+  const [cityFilter, setCityFilter] = useState<string>(searchParams.get("city") || "all");
+  const [areaFilter, setAreaFilter] = useState<string>(searchParams.get("area") || "all");
+  const [onboardedByFilter, setOnboardedByFilter] = useState<string>(searchParams.get("onboarded_by") || "all");
+  const [statusFilter, setStatusFilter] = useState<BusinessStatus | "due-date" | "pending" | "all">(
+    (searchParams.get("status") as BusinessStatus) || "all"
+  );
+  const [currentPage, setCurrentPage] = useState<number>(
+    parseInt(searchParams.get("page") || "1", 10)
+  );
+  const pageSize = 20;
+  
   const [user, setUser] = useState(getStoredUser());
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [isLoadingBusinesses, setIsLoadingBusinesses] = useState(false);
   const [businessesError, setBusinessesError] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({
+    categories: [],
+    cities: [],
+    areas: [],
+    onboarded_by: [],
+  });
+
+  // Debounce search input (300ms delay)
+  const debouncedSearch = useDebounce(searchInput, 300);
+
+  // Update URL when filters change
+  const updateURL = useCallback((params: Record<string, string>) => {
+    const newParams = new URLSearchParams();
+    
+    Object.entries(params).forEach(([key, value]) => {
+      if (value && value !== "all" && value !== "1") {
+        newParams.set(key, value);
+      } else if (key === "page" && value !== "1") {
+        newParams.set(key, value);
+      }
+    });
+    
+    const queryString = newParams.toString();
+    const newUrl = queryString ? `?${queryString}` : window.location.pathname;
+    router.push(newUrl, { scroll: false });
+  }, [router]);
 
   // Redirect non-admins away from admin dashboard
   useEffect(() => {
@@ -63,19 +137,13 @@ export default function AdminDashboardPage() {
     }
   }, [router]);
 
-  // Fetch onboarded businesses for admin users
+  // Fetch businesses with filters and pagination
   useEffect(() => {
     const fetchOnboardedBusinesses = async () => {
       const currentUser = getStoredUser();
 
-    // Proactively remove legacy fake data if it exists
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("tribly_sales_team");
-    }
-
       if (!currentUser) return;
 
-      // Only fetch for admin users
       const isAdmin = currentUser.role === "admin" || currentUser.userType === "admin";
       if (!isAdmin) return;
 
@@ -94,10 +162,37 @@ export default function AdminDashboardPage() {
           headers["Authorization"] = `Bearer ${authToken}`;
         }
 
-        const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/onboarded_businesses`, {
-          method: "GET",
-          headers,
-        });
+        // Build query params for API call
+        const params = new URLSearchParams();
+        params.set("page", currentPage.toString());
+        params.set("page_size", pageSize.toString());
+        
+        if (debouncedSearch.trim()) {
+          params.set("search", debouncedSearch.trim());
+        }
+        if (categoryFilter !== "all") {
+          params.set("category", categoryFilter);
+        }
+        if (statusFilter !== "all" && statusFilter !== "due-date" && statusFilter !== "pending") {
+          params.set("status_filter", statusFilter);
+        }
+        if (cityFilter !== "all") {
+          params.set("city", cityFilter);
+        }
+        if (areaFilter !== "all") {
+          params.set("area", areaFilter);
+        }
+        if (onboardedByFilter !== "all") {
+          params.set("onboarded_by", onboardedByFilter);
+        }
+
+        const response = await fetch(
+          `${apiBaseUrl}/dashboard/v1/business_qr/onboarded_businesses?${params.toString()}`,
+          {
+            method: "GET",
+            headers,
+          }
+        );
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
@@ -164,18 +259,39 @@ export default function AdminDashboardPage() {
         });
 
         setBusinesses(mappedBusinesses);
+        
+        // Set pagination data from API response
+        setTotalCount(data.total || 0);
+        setTotalPages(data.total_pages || 0);
+        
+        // Set filter options from API response
+        if (data.filter_options) {
+          setFilterOptions(data.filter_options);
+        }
       } catch (error) {
         console.error("Error fetching onboarded businesses:", error);
         setBusinessesError(error instanceof Error ? error.message : "Failed to fetch businesses");
-        // Fallback to mock data on error
-        setBusinesses(mockBusinesses);
+        setBusinesses([]);
+        setTotalCount(0);
+        setTotalPages(0);
       } finally {
         setIsLoadingBusinesses(false);
       }
     };
 
     fetchOnboardedBusinesses();
-  }, []);
+    
+    // Update URL with current filter state
+    updateURL({
+      search: debouncedSearch,
+      category: categoryFilter,
+      status: statusFilter,
+      city: cityFilter,
+      area: areaFilter,
+      onboarded_by: onboardedByFilter,
+      page: currentPage.toString(),
+    });
+  }, [debouncedSearch, categoryFilter, statusFilter, cityFilter, areaFilter, onboardedByFilter, currentPage, updateURL]);
 
   useEffect(() => {
     const currentUser = getStoredUser();
@@ -215,174 +331,139 @@ export default function AdminDashboardPage() {
     router.push("/login");
   };
 
-  // Get businesses based on user role (admin only on this page)
-  const availableBusinesses = useMemo(() => {
-    if (!user) return [];
+  // Use filter options from API response
+  const uniqueCities = filterOptions.cities;
+  const uniqueAreas = filterOptions.areas;
+  const uniqueOnboardedBy = filterOptions.onboarded_by;
 
-    const isAdmin = user.role === "admin" || user.userType === "admin";
-    if (isAdmin && businesses.length > 0) {
-      return businesses;
-    }
-
-    return [];
-  }, [user, businesses]);
-
-
-  // Get unique cities for city filter
-  const uniqueCities = useMemo(() => {
-    const cities = availableBusinesses
-      .map((b) => b.city)
-      .filter((city): city is string => Boolean(city));
-    return Array.from(new Set(cities)).sort();
-  }, [availableBusinesses]);
-
-  // Get unique areas based on selected city
-  const uniqueAreas = useMemo(() => {
-    if (cityFilter === "all") {
-      // If no city selected, show all areas
-      const areas = availableBusinesses
-        .map((b) => b.area)
-        .filter((area): area is string => Boolean(area));
-      return Array.from(new Set(areas)).sort();
-    } else {
-      // If city selected, show only areas in that city
-      const areas = availableBusinesses
-        .filter((b) => b.city === cityFilter)
-        .map((b) => b.area)
-        .filter((area): area is string => Boolean(area));
-      return Array.from(new Set(areas)).sort();
-    }
-  }, [cityFilter, availableBusinesses]);
-
-  // Get sales team for filter - Mock/Local storage deprecated
-  // In a real implementation, valid sales team members would come from an API if needed.
-  const salesTeam: any[] = [];
-
-  // Get unique onboarded_by values for filter
-  const uniqueOnboardedBy = useMemo(() => {
-    const onboardedBySet = new Set<string>();
-    availableBusinesses.forEach((business) => {
-      if (business.onboarded_by) {
-        onboardedBySet.add(business.onboarded_by);
-      }
-    });
-    return Array.from(onboardedBySet).sort();
-  }, [availableBusinesses]);
-
-  // Helper function to get sales team member name by ID
-  const getSalesTeamMemberName = (salesTeamId?: string): string => {
-    // If we have the name stored directly, we could use it, but here we just return a placeholder
-    // since we removed the local storage look up.
-    return "Sales Agent";
-  };
-
+  // Server-side filtering is now used - businesses array is already filtered from API
+  // Keep due-date and pending filters client-side for now (require payment fields)
   const filteredBusinesses = useMemo(() => {
-    let filtered = availableBusinesses;
+    let filtered = businesses;
 
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (business) =>
-          business.name.toLowerCase().includes(query) ||
-          business.email.toLowerCase().includes(query) ||
-          business.category.toLowerCase().includes(query) ||
-          business.city?.toLowerCase().includes(query) ||
-          business.area?.toLowerCase().includes(query)
-      );
-    }
+    // Apply due-date and pending filters client-side (not yet implemented in backend)
+    if (statusFilter === "due-date") {
+      const today = new Date();
+      const sixtyDaysFromNow = new Date(today);
+      sixtyDaysFromNow.setDate(today.getDate() + 60);
 
-    // Apply category filter
-    if (categoryFilter !== "all") {
-      filtered = filtered.filter((business) => business.category === categoryFilter);
-    }
+      filtered = filtered.filter((business) => {
+        if (!business.paymentExpiryDate) return false;
+        const expiryDate = new Date(business.paymentExpiryDate);
+        return expiryDate <= sixtyDaysFromNow && expiryDate >= today;
+      });
+    } else if (statusFilter === "pending") {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const oneDayAgo = new Date(today);
+      oneDayAgo.setDate(today.getDate() - 1);
 
-    // Apply city filter
-    if (cityFilter !== "all") {
-      filtered = filtered.filter((business) => business.city === cityFilter);
-    }
-
-    // Apply area filter
-    if (areaFilter !== "all") {
-      filtered = filtered.filter((business) => business.area === areaFilter);
-    }
-
-    // Apply onboarded by filter
-    if (onboardedByFilter !== "all") {
-      filtered = filtered.filter((business) => business.onboarded_by === onboardedByFilter);
-    }
-
-    // Apply status filter
-    if (statusFilter !== "all") {
-      if (statusFilter === "due-date") {
-        // Due date: 60 days before paymentExpiryDate
-        const today = new Date();
-        const sixtyDaysFromNow = new Date(today);
-        sixtyDaysFromNow.setDate(today.getDate() + 60);
-
-        filtered = filtered.filter((business) => {
-          if (!business.paymentExpiryDate) return false;
-          const expiryDate = new Date(business.paymentExpiryDate);
-          // Check if expiry date is within 60 days from today
-          return expiryDate <= sixtyDaysFromNow && expiryDate >= today;
-        });
-      } else if (statusFilter === "pending") {
-        // Payment pending: after 1 day of billing date
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const oneDayAgo = new Date(today);
-        oneDayAgo.setDate(today.getDate() - 1);
-
-        filtered = filtered.filter((business) => {
-          if (!business.billingDate) return false;
-          const billingDate = new Date(business.billingDate);
-          billingDate.setHours(0, 0, 0, 0);
-          // Check if billing date was more than 1 day ago and payment is not completed
-          return billingDate <= oneDayAgo && business.paymentStatus !== "active";
-        });
-      } else if (statusFilter === "inactive") {
-        // Inactive: manual status updates OR payment pending more than 30 days
-        const today = new Date();
-        const thirtyDaysAgo = new Date(today);
-        thirtyDaysAgo.setDate(today.getDate() - 30);
-
-        filtered = filtered.filter((business) => {
-          // Manual status update (status is explicitly inactive)
-          if (business.status === "inactive") {
-            return true;
-          }
-          // Check if payment pending more than 30 days (even if status is active)
-          if (business.billingDate) {
-            const billingDate = new Date(business.billingDate);
-            billingDate.setHours(0, 0, 0, 0);
-            return billingDate <= thirtyDaysAgo && business.paymentStatus !== "active";
-          }
-          return false;
-        });
-      } else {
-        // Standard status filter (active/inactive)
-        filtered = filtered.filter((business) => business.status === statusFilter);
-      }
+      filtered = filtered.filter((business) => {
+        if (!business.billingDate) return false;
+        const billingDate = new Date(business.billingDate);
+        billingDate.setHours(0, 0, 0, 0);
+        return billingDate <= oneDayAgo && business.paymentStatus !== "active";
+      });
     }
 
     return filtered;
-  }, [searchQuery, categoryFilter, cityFilter, areaFilter, onboardedByFilter, statusFilter, availableBusinesses]);
+  }, [businesses, statusFilter]);
 
-  const hasActiveFilters = categoryFilter !== "all" || cityFilter !== "all" || areaFilter !== "all" || onboardedByFilter !== "all" || statusFilter !== "all" || searchQuery.trim() !== "";
+  const hasActiveFilters = categoryFilter !== "all" || cityFilter !== "all" || areaFilter !== "all" || onboardedByFilter !== "all" || statusFilter !== "all" || searchInput.trim() !== "";
 
   const clearFilters = () => {
-    setSearchQuery("");
+    setSearchInput("");
     setCategoryFilter("all");
     setCityFilter("all");
     setAreaFilter("all");
     setOnboardedByFilter("all");
     setStatusFilter("all");
+    setCurrentPage(1);
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setCategoryFilter(value as BusinessCategory | "all");
+    setCurrentPage(1); // Reset to page 1 when filter changes
+  };
+
+  const handleStatusChange = (value: string) => {
+    setStatusFilter(value as BusinessStatus | "due-date" | "pending" | "all");
+    setCurrentPage(1);
   };
 
   const handleCityFilterChange = (value: string) => {
     setCityFilter(value);
-    // Reset area filter when city changes
-    setAreaFilter("all");
+    setAreaFilter("all"); // Reset area when city changes
+    setCurrentPage(1);
+  };
+
+  const handleAreaChange = (value: string) => {
+    setAreaFilter(value);
+    setCurrentPage(1);
+  };
+
+  const handleOnboardedByChange = (value: string) => {
+    setOnboardedByFilter(value);
+    setCurrentPage(1);
+  };
+
+  // Pagination handlers
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisiblePages = 5;
+    
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Always show first page
+      pages.push(1);
+      
+      if (currentPage > 3) {
+        pages.push("...");
+      }
+      
+      // Show pages around current page
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      
+      for (let i = start; i <= end; i++) {
+        if (!pages.includes(i)) {
+          pages.push(i);
+        }
+      }
+      
+      if (currentPage < totalPages - 2) {
+        pages.push("...");
+      }
+      
+      // Always show last page
+      if (!pages.includes(totalPages)) {
+        pages.push(totalPages);
+      }
+    }
+    
+    return pages;
   };
 
   const handleBusinessClick = (business: Business) => {
@@ -482,8 +563,11 @@ export default function AdminDashboardPage() {
                   <Input
                     id="search"
                     placeholder="Search by name, email, category..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    value={searchInput}
+                    onChange={(e) => {
+                      setSearchInput(e.target.value);
+                      setCurrentPage(1); // Reset to page 1 on search
+                    }}
                     className="pl-10"
                     autoComplete="off"
                   />
@@ -493,7 +577,7 @@ export default function AdminDashboardPage() {
               {/* Category Filter */}
               <div className="space-y-2">
                 <Label htmlFor="category-filter">Category</Label>
-                <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value as BusinessCategory | "all")}>
+                <Select value={categoryFilter} onValueChange={handleCategoryChange}>
                   <SelectTrigger id="category-filter">
                     <SelectValue placeholder="All Categories" />
                   </SelectTrigger>
@@ -523,7 +607,7 @@ export default function AdminDashboardPage() {
               {/* Status Filter */}
               <div className="space-y-2">
                 <Label htmlFor="status-filter">Status</Label>
-                <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as BusinessStatus | "due-date" | "pending" | "all")}>
+                <Select value={statusFilter} onValueChange={handleStatusChange}>
                   <SelectTrigger id="status-filter">
                     <SelectValue placeholder="All Status" />
                   </SelectTrigger>
@@ -564,11 +648,11 @@ export default function AdminDashboardPage() {
                 <Label htmlFor="area-filter">Area</Label>
                 <Select
                   value={areaFilter}
-                  onValueChange={setAreaFilter}
-                  disabled={cityFilter !== "all" && uniqueAreas.length === 0}
+                  onValueChange={handleAreaChange}
+                  disabled={uniqueAreas.length === 0}
                 >
                   <SelectTrigger id="area-filter">
-                    <SelectValue placeholder={cityFilter !== "all" && uniqueAreas.length === 0 ? "No areas available" : "All Areas"} />
+                    <SelectValue placeholder={uniqueAreas.length === 0 ? "No areas available" : "All Areas"} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Areas</SelectItem>
@@ -584,7 +668,7 @@ export default function AdminDashboardPage() {
               {/* Onboarded By Filter */}
               <div className="space-y-2">
                 <Label htmlFor="onboarded-by-filter">Onboarded By</Label>
-                <Select value={onboardedByFilter} onValueChange={setOnboardedByFilter}>
+                <Select value={onboardedByFilter} onValueChange={handleOnboardedByChange}>
                   <SelectTrigger id="onboarded-by-filter">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
@@ -607,11 +691,11 @@ export default function AdminDashboardPage() {
           <CardHeader>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <CardTitle>All Businesses ({filteredBusinesses.length})</CardTitle>
+                <CardTitle>All Businesses ({totalCount})</CardTitle>
                 <CardDescription>
-                  {filteredBusinesses.length === availableBusinesses.length
-                    ? "Manage and view all your businesses"
-                    : `Showing ${filteredBusinesses.length} of ${availableBusinesses.length} businesses`}
+                  {totalCount > 0
+                    ? `Showing ${(currentPage - 1) * pageSize + 1}-${Math.min(currentPage * pageSize, totalCount)} of ${totalCount} businesses`
+                    : "No businesses found"}
                 </CardDescription>
               </div>
             </div>
@@ -634,56 +718,110 @@ export default function AdminDashboardPage() {
                   <div className="text-center py-8 text-muted-foreground">
                     <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No businesses found</p>
+                    {hasActiveFilters && (
+                      <Button variant="link" onClick={clearFilters} className="mt-2">
+                        Clear filters
+                      </Button>
+                    )}
                   </div>
                 ) : (
-                filteredBusinesses.map((business) => (
-                  <div
-                    key={business.id}
-                    onClick={() => handleBusinessClick(business)}
-                    className="p-4 border rounded-lg hover:bg-accent/50 cursor-pointer transition-colors"
-                  >
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-semibold">{business.name}</h3>
-                          {getStatusBadge(business.status)}
-                        </div>
-                        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Building2 className="h-3 w-3" />
-                            {business.category.charAt(0).toUpperCase() + business.category.slice(1)}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Mail className="h-3 w-3" />
-                            {business.email}
-                          </span>
-                          {business.phone && (
+                <>
+                  {filteredBusinesses.map((business) => (
+                    <div
+                      key={business.id}
+                      onClick={() => handleBusinessClick(business)}
+                      className="p-4 border rounded-lg hover:bg-accent/50 cursor-pointer transition-colors"
+                    >
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="text-lg font-semibold">{business.name}</h3>
+                            {getStatusBadge(business.status)}
+                          </div>
+                          <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {business.phone}
+                              <Building2 className="h-3 w-3" />
+                              {business.category.charAt(0).toUpperCase() + business.category.slice(1)}
                             </span>
-                          )}
-                          {business.city && business.area && (
                             <span className="flex items-center gap-1">
-                              <MapPin className="h-3 w-3" />
-                              {business.city}, {business.area}
+                              <Mail className="h-3 w-3" />
+                              {business.email}
                             </span>
-                          )}
-                          <span className="flex items-center gap-1">
-                            <UserCircle className="h-3 w-3" />
-                            Onboarded by {business.onboarded_by}
-                          </span>
+                            {business.phone && (
+                              <span className="flex items-center gap-1">
+                                <Phone className="h-3 w-3" />
+                                {business.phone}
+                              </span>
+                            )}
+                            {business.city && business.area && (
+                              <span className="flex items-center gap-1">
+                                <MapPin className="h-3 w-3" />
+                                {business.city}, {business.area}
+                              </span>
+                            )}
+                            <span className="flex items-center gap-1">
+                              <UserCircle className="h-3 w-3" />
+                              Onboarded by {business.onboarded_by}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                        <div className="text-right">
-                          <div className="text-sm font-medium">{business.totalReviews}</div>
-                          <div className="text-xs text-muted-foreground">Total Reviews</div>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                          <div className="text-right">
+                            <div className="text-sm font-medium">{business.totalReviews}</div>
+                            <div className="text-xs text-muted-foreground">Total Reviews</div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-2 pt-4 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={goToPreviousPage}
+                        disabled={currentPage === 1}
+                        className="gap-1"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Prev
+                      </Button>
+                      
+                      <div className="flex items-center gap-1">
+                        {getPageNumbers().map((pageNum, index) => (
+                          typeof pageNum === "number" ? (
+                            <Button
+                              key={pageNum}
+                              variant={currentPage === pageNum ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => goToPage(pageNum)}
+                              className="min-w-[36px]"
+                            >
+                              {pageNum}
+                            </Button>
+                          ) : (
+                            <span key={`ellipsis-${index}`} className="px-2 text-muted-foreground">
+                              {pageNum}
+                            </span>
+                          )
+                        ))}
+                      </div>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={goToNextPage}
+                        disabled={currentPage === totalPages}
+                        className="gap-1"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </>
                 )}
               </div>
             )}

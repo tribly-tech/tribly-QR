@@ -40,6 +40,7 @@ function mapApiToBusiness(qrId: string, qrData: any): Business {
       parseWhatsAppNumberFromUrl(qrData.whatsapp_url || "") || undefined,
     whatsappUrl: qrData.whatsapp_url || undefined,
     keywords: Array.isArray(qrData.business_tags) ? qrData.business_tags : [],
+    services: Array.isArray(qrData.business_services) ? qrData.business_services : [],
     feedbackTone: "professional",
     autoReplyEnabled: false,
     paymentPlan:

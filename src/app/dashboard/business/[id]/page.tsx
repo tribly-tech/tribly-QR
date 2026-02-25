@@ -18,7 +18,7 @@ import { getWhatsAppLinkWithMessage, parseWhatsAppNumberFromUrl } from "@/lib/wh
 import {
   updateBusinessEditOverrides,
 } from "@/lib/business-local-storage";
-import { getStoredUser, logout, setStoredUser, getAuthToken } from "@/lib/auth";
+import { logout, setStoredUser, getAuthToken } from "@/lib/auth";
 import { useBusinessData } from "@/hooks/useBusinessData";
 import { BUSINESS_MAIN_TABS, BUSINESS_SETTINGS_SUB_TABS } from "@/lib/routes";
 import { categorySuggestions, serviceSuggestions } from "@/lib/category-suggestions";
@@ -110,7 +110,6 @@ export default function BusinessDetailPage() {
     qrCodeError,
     setQrCodeError,
     currentUser,
-    setCurrentUser,
     apiReviews,
     isLoadingReviews,
     reviewError,
@@ -138,6 +137,11 @@ export default function BusinessDetailPage() {
   const [showBusinessServiceSuggestions, setShowBusinessServiceSuggestions] = useState(false);
   const [aiServiceSuggestions, setAiServiceSuggestions] = useState<string[]>([]);
   const [isLoadingAiSuggestions, setIsLoadingAiSuggestions] = useState(false);
+  const [aiCategoryTypes, setAiCategoryTypes] = useState<string[]>([]);
+  const [isLoadingCategoryTypes, setIsLoadingCategoryTypes] = useState(false);
+  const [isGeneratingOverview, setIsGeneratingOverview] = useState(false);
+  const [isLoadingAIKeywords, setIsLoadingAIKeywords] = useState(false);
+  const [aiKeywordSuggestions, setAiKeywordSuggestions] = useState<string[]>([]);
   const [savingSection, setSavingSection] = useState<string | null>(null);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [pendingLeaveAction, setPendingLeaveAction] = useState<{
@@ -289,6 +293,43 @@ export default function BusinessDetailPage() {
   const businessServiceSuggestions = aiServiceSuggestions.length > 0
     ? aiServiceSuggestions
     : staticServiceSuggestions;
+
+  // Fetch AI category type suggestions when category changes
+  useEffect(() => {
+    if (!business?.category) {
+      setAiCategoryTypes([]);
+      return;
+    }
+    let cancelled = false;
+    setIsLoadingCategoryTypes(true);
+    setAiCategoryTypes([]);
+
+    const token = getAuthToken();
+    fetch("/api/ai/suggest-category-types", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ category: business.category }),
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("AI not available"))))
+      .then((data) => {
+        if (!cancelled && Array.isArray(data?.types) && data.types.length > 0) {
+          setAiCategoryTypes(data.types);
+        }
+      })
+      .catch(() => {
+        // Silently fall back to static categorySuggestions
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingCategoryTypes(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [business?.category]);
 
   // Close business service suggestions on outside tap/click
   useEffect(() => {
@@ -538,6 +579,68 @@ export default function BusinessDetailPage() {
     }
   };
 
+  const handleGenerateOverview = async () => {
+    if (!business) return;
+    setIsGeneratingOverview(true);
+    try {
+      const token = getAuthToken();
+      const res = await fetch("/api/ai/generate-overview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          business_name: business.name,
+          category: business.category,
+          services: business.services || [],
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.overview) {
+          handleUpdateBusiness({ overview: data.overview });
+        }
+      }
+    } catch {
+      // silently ignore
+    } finally {
+      setIsGeneratingOverview(false);
+    }
+  };
+
+  const handleAISuggestKeywords = async () => {
+    if (!business) return;
+    setIsLoadingAIKeywords(true);
+    try {
+      const token = getAuthToken();
+      const res = await fetch("/api/ai/suggest-keywords", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          category: business.category,
+          business_name: business.name,
+          city: business.city || "",
+          area: business.area || "",
+          services: business.services || [],
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.keywords) && data.keywords.length > 0) {
+          setAiKeywordSuggestions(data.keywords);
+        }
+      }
+    } catch {
+      // silently ignore
+    } finally {
+      setIsLoadingAIKeywords(false);
+    }
+  };
+
   // Get service suggestions based on category
   // Generate SEO-optimized suggested keywords based on business category, location, and name
   const suggestedKeywords = useMemo(() => {
@@ -545,6 +648,11 @@ export default function BusinessDetailPage() {
 
     const suggestions: string[] = [];
     const currentKeywords = business.keywords || [];
+
+    // Prepend any AI-suggested keywords first so they appear at the top
+    if (aiKeywordSuggestions.length > 0) {
+      suggestions.push(...aiKeywordSuggestions);
+    }
 
     // SEO-focused category-based keyword suggestions
     const categoryKeywords: Record<string, string[]> = {
@@ -658,9 +766,18 @@ export default function BusinessDetailPage() {
       keyword => !currentKeywords.some(k => k.toLowerCase() === keyword.toLowerCase())
     );
 
+    // Deduplicate (AI keywords may overlap with static ones)
+    const seen = new Set<string>();
+    const deduped = filtered.filter((k) => {
+      const lower = k.toLowerCase();
+      if (seen.has(lower)) return false;
+      seen.add(lower);
+      return true;
+    });
+
     // Return all filtered suggestions (will be limited in display)
-    return filtered;
-  }, [business]);
+    return deduped;
+  }, [business, aiKeywordSuggestions]);
 
   // Display limited suggestions based on suggestionsLimit
   const displayedSuggestions = useMemo(() => {
@@ -672,7 +789,7 @@ export default function BusinessDetailPage() {
     if (!business || !lastSavedRef.current.businessInfo) return false;
     const s = lastSavedRef.current.businessInfo;
     const cur = business;
-    if (s.name !== cur.name || s.category !== cur.category || s.email !== cur.email) return true;
+    if (s.name !== cur.name || s.category !== cur.category) return true;
     if ((s.phone as string) !== (cur.phone || "")) return true;
     if ((s.address as string) !== (cur.address || "")) return true;
     if ((s.city as string) !== (cur.city || "")) return true;
@@ -1449,16 +1566,18 @@ export default function BusinessDetailPage() {
                     <div className="grid gap-4">
                       <div className="grid gap-2">
                         <Label htmlFor="business-name">
-                          Business Name <span className="text-destructive">*</span>
+                          Business Name
                         </Label>
                         <Input
                           id="business-name"
                           placeholder="e.g., The Coffee House"
                           value={business.name}
-                          onChange={(e) => handleUpdateBusiness({ name: e.target.value })}
+                          readOnly
+                          disabled
+                          className="bg-muted cursor-not-allowed"
                         />
                         <p className="text-xs text-muted-foreground">
-                          Enter the official business name as it appears on legal documents
+                          Business name cannot be changed after registration
                         </p>
                       </div>
 
@@ -1548,43 +1667,52 @@ export default function BusinessDetailPage() {
                           </div>
                         )}
 
-                        {/* Category suggestions */}
-                        {business.category &&
-                          categorySuggestions[business.category as BusinessCategory] && (
+                        {/* Category suggestions — AI-powered with static fallback */}
+                        {business.category && (() => {
+                          const typeSuggestions =
+                            aiCategoryTypes.length > 0
+                              ? aiCategoryTypes
+                              : categorySuggestions[business.category as BusinessCategory];
+                          if (!typeSuggestions?.length) return null;
+                          return (
                             <div className="mt-2">
-                              <p className="mb-2 text-xs text-muted-foreground">
+                              <p className="mb-2 text-xs text-muted-foreground flex items-center gap-1">
+                                {isLoadingCategoryTypes ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : aiCategoryTypes.length > 0 ? (
+                                  <Sparkles className="h-3 w-3" />
+                                ) : null}
                                 Common types for {business.category}:
                               </p>
                               <div className="flex flex-wrap gap-2">
-                                {categorySuggestions[business.category as BusinessCategory]
-                                  .slice(0, 5)
-                                  .map((suggestion) => {
-                                    const currentServices = business.services || [];
-                                    const isSelected = currentServices.includes(suggestion);
-                                    return (
-                                      <Badge
-                                        key={suggestion}
-                                        variant={isSelected ? "default" : "secondary"}
-                                        className="text-xs cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
-                                        onClick={() => {
-                                          if (isSelected) {
-                                            handleUpdateBusiness({
-                                              services: currentServices.filter((s) => s !== suggestion),
-                                            });
-                                          } else {
-                                            handleUpdateBusiness({
-                                              services: [...currentServices, suggestion],
-                                            });
-                                          }
-                                        }}
-                                      >
-                                        {suggestion}
-                                      </Badge>
-                                    );
-                                  })}
+                                {typeSuggestions.slice(0, 8).map((suggestion) => {
+                                  const currentServices = business.services || [];
+                                  const isSelected = currentServices.includes(suggestion);
+                                  return (
+                                    <Badge
+                                      key={suggestion}
+                                      variant={isSelected ? "default" : "secondary"}
+                                      className="text-xs cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+                                      onClick={() => {
+                                        if (isSelected) {
+                                          handleUpdateBusiness({
+                                            services: currentServices.filter((s) => s !== suggestion),
+                                          });
+                                        } else {
+                                          handleUpdateBusiness({
+                                            services: [...currentServices, suggestion],
+                                          });
+                                        }
+                                      }}
+                                    >
+                                      {suggestion}
+                                    </Badge>
+                                  );
+                                })}
                               </div>
                             </div>
-                          )}
+                          );
+                        })()}
 
                         <p className="text-xs text-muted-foreground">
                           Select the primary category that best describes the business
@@ -1768,7 +1896,24 @@ export default function BusinessDetailPage() {
                   <CardContent>
                     <div className="grid gap-4">
                       <div className="grid gap-2">
-                        <Label htmlFor="overview">Business Overview</Label>
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="overview">Business Overview</Label>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={handleGenerateOverview}
+                            disabled={isGeneratingOverview}
+                            className="h-7 text-xs"
+                          >
+                            {isGeneratingOverview ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                            ) : (
+                              <Sparkles className="h-3.5 w-3.5 mr-1" />
+                            )}
+                            Generate with AI
+                          </Button>
+                        </div>
                         <Textarea
                           id="overview"
                           placeholder="Describe the business, its services, specialties, and what makes it unique..."
@@ -1804,15 +1949,13 @@ export default function BusinessDetailPage() {
                         <Input
                           id="email"
                           type="email"
-                          placeholder="contact@business.com"
                           value={business.email}
-                          onChange={(e) =>
-                            handleUpdateBusiness({ email: e.target.value })
-                          }
-                          required
+                          readOnly
+                          disabled
+                          className="bg-muted cursor-not-allowed"
                         />
                         <p className="text-xs text-muted-foreground">
-                          Primary email address for business communications
+                          Email cannot be changed after registration
                         </p>
                       </div>
                       <div className="grid gap-2">
@@ -1917,6 +2060,8 @@ export default function BusinessDetailPage() {
                   suggestionsLimit={suggestionsLimit}
                   setSuggestionsLimit={setSuggestionsLimit}
                   displayedSuggestions={displayedSuggestions}
+                  onAISuggest={handleAISuggestKeywords}
+                  isLoadingAISuggestions={isLoadingAIKeywords}
                 />
               </TabsContent>
               <TabsContent value="links" className="mt-5 space-y-6">

@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Hash, PlusIcon, XIcon } from "lucide-react";
+import { Hash, Loader2, PlusIcon, Sparkles, XIcon } from "lucide-react";
 import { Business } from "@/lib/types";
 import { Dispatch, SetStateAction } from "react";
 
@@ -18,6 +18,8 @@ interface KeywordsTabProps {
   suggestionsLimit: number;
   setSuggestionsLimit: Dispatch<SetStateAction<number>>;
   displayedSuggestions: string[];
+  onAISuggest?: () => void;
+  isLoadingAISuggestions?: boolean;
 }
 
 export function KeywordsTab({
@@ -31,6 +33,8 @@ export function KeywordsTab({
   suggestionsLimit,
   setSuggestionsLimit,
   displayedSuggestions,
+  onAISuggest,
+  isLoadingAISuggestions = false,
 }: KeywordsTabProps) {
   return (
     <Card>
@@ -100,16 +104,34 @@ export function KeywordsTab({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium">Suggested Keywords</Label>
-                {suggestedKeywords.length > suggestionsLimit && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSuggestionsLimit((prev) => prev + 12)}
-                    className="text-xs text-primary hover:text-primary/80"
-                  >
-                    Suggest more
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  {onAISuggest && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={onAISuggest}
+                      disabled={isLoadingAISuggestions}
+                      className="h-7 text-xs"
+                    >
+                      {isLoadingAISuggestions ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                      ) : (
+                        <Sparkles className="h-3.5 w-3.5 mr-1" />
+                      )}
+                      AI Suggest
+                    </Button>
+                  )}
+                  {suggestedKeywords.length > suggestionsLimit && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSuggestionsLimit((prev) => prev + 12)}
+                      className="text-xs text-primary hover:text-primary/80"
+                    >
+                      Suggest more
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 {displayedSuggestions.map((keyword, index) => (
