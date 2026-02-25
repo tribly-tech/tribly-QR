@@ -9,6 +9,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { BusinessCategory, BusinessStatus, UserRole } from "@/lib/types";
 import { logout, setStoredUser, getStoredUser, getAuthToken } from "@/lib/auth";
 import { generateQRCodeDataUrl } from "@/lib/qr-utils";
@@ -116,6 +125,7 @@ function SalesDashboardContent() {
 
   // Payment state
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [showOnboardSuccessModal, setShowOnboardSuccessModal] = useState(false);
   const [paymentQRCode, setPaymentQRCode] = useState<string | null>(null);
   const [paymentTimer, setPaymentTimer] = useState(900);
 
@@ -518,8 +528,6 @@ function SalesDashboardContent() {
     setOnboardError(null);
 
     try {
-      const apiBaseUrl =
-        process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
       const authToken = getAuthToken();
       const gbpSessionId =
         (typeof window !== "undefined" &&
@@ -563,24 +571,19 @@ function SalesDashboardContent() {
         headers["Authorization"] = `Bearer ${authToken}`;
       }
 
-      const response = await fetch(
-        `${apiBaseUrl}/dashboard/v1/business_qr/register`,
-        {
-          method: "POST",
-          headers,
-          body: JSON.stringify(payload),
-        }
-      );
+      const response = await fetch("/api/business/register", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
 
       const data = await response.json();
 
-      if (!response.ok || data.status !== "success") {
-        throw new Error(
-          data.detail || data.message || "Failed to onboard business"
-        );
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to onboard business");
       }
 
-      const businessId = data.data?.business_id;
+      const businessId = data?.business_id;
       if (businessId && typeof window !== "undefined") {
         sessionStorage.setItem("last_registered_business_id", businessId);
         sessionStorage.removeItem("gbp_completed_session_id");
@@ -609,11 +612,7 @@ function SalesDashboardContent() {
       setSuggestedCategories([]);
       setServiceInput("");
 
-      alert("Business onboarded successfully!");
-
-      if (businessId) {
-        router.push(`/dashboard/business/${businessId}`);
-      }
+      setShowOnboardSuccessModal(true);
     } catch (error: any) {
       console.error("Error onboarding business:", error);
       setOnboardError(
@@ -766,6 +765,45 @@ function SalesDashboardContent() {
         paymentTimer={paymentTimer}
         onMarkCompleted={handleMarkPaymentCompleted}
       />
+
+      {/* Onboard Success Modal */}
+      <Dialog
+        open={showOnboardSuccessModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowOnboardSuccessModal(false);
+            setCurrentStep(1);
+            setGbpScore(null);
+            setBusinessPhoneNumber("");
+            router.push("/sales-dashboard/step-1");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-green-600">
+              <CheckCircle2 className="h-6 w-6" />
+              Successfully onboarded
+            </DialogTitle>
+            <DialogDescription>
+              The business has been onboarded successfully. You can now start onboarding another business.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                setShowOnboardSuccessModal(false);
+                setCurrentStep(1);
+                setGbpScore(null);
+                setBusinessPhoneNumber("");
+                router.push("/sales-dashboard/step-1");
+              }}
+            >
+              Back to dashboard
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -119,6 +119,82 @@ export type PerformanceFilter =
   | "half_yearly"
   | "yearly";
 
+export interface RegisterBusinessPayload {
+  qr_code: string;
+  gbp_session_id?: string;
+  name?: string;
+  description?: string;
+  email?: string;
+  phone?: string;
+  category?: string;
+  google_review_url?: string;
+  plan: string;
+  tags?: string[];
+  address?: {
+    address_line1?: string;
+    address_line2?: string;
+    city?: string;
+    area?: string;
+    pincode?: string;
+  };
+}
+
+export async function registerBusiness(
+  payload: RegisterBusinessPayload,
+  authHeader: string | null
+): Promise<ApiResult<{ business_id?: string }>> {
+  const code = (payload.qr_code || "").trim();
+  if (code.length !== 8) {
+    return {
+      ok: false,
+      status: 400,
+      error: { message: "qr_code must be exactly 8 characters" },
+    };
+  }
+  if (!payload.plan) {
+    return {
+      ok: false,
+      status: 400,
+      error: { message: "plan is required" },
+    };
+  }
+
+  try {
+    const response = await fetch(
+      `${getTriblyBaseUrl()}/dashboard/v1/business_qr/register`,
+      {
+        method: "POST",
+        headers: buildHeaders(authHeader),
+        body: JSON.stringify(payload),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || data.status !== "success") {
+      return {
+        ok: false,
+        status: response.status,
+        error:
+          data.detail ?? data.message ?? { message: "Failed to onboard business" },
+      };
+    }
+
+    return {
+      ok: true,
+      status: response.status,
+      data: data.data ?? {},
+    };
+  } catch (error) {
+    console.error("Error registering business:", error);
+    return {
+      ok: false,
+      status: 500,
+      error: { message: "Failed to onboard business" },
+    };
+  }
+}
+
 export async function fetchPerformanceMetrics(
   filter: PerformanceFilter,
   authHeader: string | null
