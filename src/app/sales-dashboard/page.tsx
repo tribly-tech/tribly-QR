@@ -40,10 +40,9 @@ import {
   PaymentCard,
   SubmitButtonCard,
   NewBusinessState,
-  calculateGBPScore,
   generateMockBusinessData,
-  PlaceDetailsData,
 } from "@/components/sales-dashboard";
+import type { PlaceDetailsData } from "@/components/sales-dashboard/types";
 
 function SalesDashboardContent() {
   const router = useRouter();
@@ -240,8 +239,25 @@ function SalesDashboardContent() {
         }
       }
 
-      // Calculate GBP score with real details (or fallback to mock data)
-      const result = await calculateGBPScore(businessName, placeDetails);
+      // Call GBP analyze API (backend)
+      const payload: Record<string, unknown> = { business_name: businessName.trim() };
+      if (placeDetails?.place_id) payload.place_id = placeDetails.place_id;
+      if (placeDetails) payload.place_details = placeDetails;
+
+      const authToken = getAuthToken();
+      const headers: HeadersInit = { "Content-Type": "application/json" };
+      if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+
+      const res = await fetch("/api/gbp/analyze", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json?.error?.error ?? json?.error ?? "Analysis failed");
+      }
+      const result = json?.data ?? json;
       setGbpScore(result.overallScore);
 
       setNewBusiness((prev) => ({ ...prev, name: businessName }));

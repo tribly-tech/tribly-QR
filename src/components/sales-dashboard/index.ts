@@ -2,13 +2,6 @@
 export * from "./types";
 
 // Utils
-export {
-  calculateMetricScore,
-  generateRecommendations,
-  calculateGBPScore,
-  API_MAPPING,
-  type PlaceDetailsData,
-} from "./utils/gbp-analysis";
 export * from "./utils/business-helpers";
 
 // Components

@@ -19,6 +19,7 @@ import {
 } from "recharts";
 import {
   AlertCircle,
+  ArrowDownRight,
   ArrowUpRight,
   CheckCircle2,
   ChevronLeft,
@@ -48,6 +49,7 @@ interface PlatformMetric {
   label: string;
   value: string;
   delta?: string;
+  growth_direction?: "up" | "down" | "flat";
 }
 
 interface SocialPlatformData {
@@ -354,6 +356,38 @@ const GBP_ENGAGEMENT = ["Reviews", "Avg rating", "Photo views"] as const;
 
 const BLANK = "—";
 
+function getGrowthDirection(value: number): "up" | "down" | "flat" {
+  if (value > 0) return "up";
+  if (value < 0) return "down";
+  return "flat";
+}
+
+function getGrowthDeltaStyles(direction?: "up" | "down" | "flat"): string {
+  switch (direction) {
+    case "up":
+      return "text-emerald-600";
+    case "down":
+      return "text-red-600";
+    case "flat":
+      return "text-amber-600";
+    default:
+      return "text-muted-foreground";
+  }
+}
+
+function getGrowthBadgeStyles(direction: "up" | "down" | "flat"): string {
+  switch (direction) {
+    case "up":
+      return "bg-emerald-100 text-emerald-700 hover:bg-emerald-100";
+    case "down":
+      return "bg-red-100 text-red-700 hover:bg-red-100";
+    case "flat":
+      return "bg-amber-100 text-amber-700 hover:bg-amber-100";
+    default:
+      return "bg-muted text-muted-foreground hover:bg-muted";
+  }
+}
+
 /** GbpData with all values blank — used when no data or error (matches health tab: no data). */
 function emptyGbpData(): GbpData {
   return {
@@ -425,11 +459,13 @@ interface PerformanceMetricsResponse {
 
 function formatGrowthMetric(info: GrowthInfo): PlatformMetric & { label: string } {
   const fmtNum = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n));
-  const delta =
-    info.growth_pct != null
-      ? `${info.growth_pct >= 0 ? "+" : ""}${info.growth_pct.toFixed(1)}%`
-      : undefined;
-  return { label: "", value: fmtNum(info.value), delta };
+  let delta: string | undefined;
+  if (info.growth_direction === "flat") {
+    delta = info.growth_pct != null && info.growth_pct === 0 ? "0%" : "—";
+  } else if (info.growth_pct != null) {
+    delta = `${info.growth_pct >= 0 ? "+" : ""}${info.growth_pct.toFixed(1)}%`;
+  }
+  return { label: "", value: fmtNum(info.value), delta, growth_direction: info.growth_direction };
 }
 
 function mapPerformanceToGbpData(data: PerformanceMetricsResponse): GbpData {
@@ -465,14 +501,14 @@ function mapPerformanceToGbpData(data: PerformanceMetricsResponse): GbpData {
     engagementGrowth: overallGrowth,
     miniChart: trendValues,
     primaryMetrics: [
-      { label: "Searches", value: searches.value, delta: searches.delta },
-      { label: "Calls", value: calls.value, delta: calls.delta },
-      { label: "Directions", value: directions.value, delta: directions.delta },
-      { label: "Website clicks", value: websiteClicks.value, delta: websiteClicks.delta },
+      { label: "Searches", value: searches.value, delta: searches.delta, growth_direction: searches.growth_direction },
+      { label: "Calls", value: calls.value, delta: calls.delta, growth_direction: calls.growth_direction },
+      { label: "Directions", value: directions.value, delta: directions.delta, growth_direction: directions.growth_direction },
+      { label: "Website clicks", value: websiteClicks.value, delta: websiteClicks.delta, growth_direction: websiteClicks.growth_direction },
     ],
     secondaryMetrics: [
-      { label: "Search views", value: searchViews.value, delta: searchViews.delta },
-      { label: "Maps views", value: mapsViews.value, delta: mapsViews.delta },
+      { label: "Search views", value: searchViews.value, delta: searchViews.delta, growth_direction: searchViews.growth_direction },
+      { label: "Maps views", value: mapsViews.value, delta: mapsViews.delta, growth_direction: mapsViews.growth_direction },
       { label: "Reviews", value: String(data.engagement.reviews ?? 0) },
       {
         label: "Avg rating",
@@ -859,10 +895,10 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
               </p>
               <div className="flex flex-col items-center justify-center gap-1.5">
                 <span className="text-2xl font-semibold leading-none text-slate-950">
-                  {summary.averageGrowth.toFixed(1)}%
+                  {formatDelta(summary.averageGrowth)}
                 </span>
-                <Badge className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100">
-                  +{timeRange}
+                <Badge className={cn("rounded-full px-2.5 py-0.5 text-[10px] font-medium", getGrowthBadgeStyles(getGrowthDirection(summary.averageGrowth)))}>
+                  {timeRange}
                 </Badge>
               </div>
               <p className="border-t border-slate-100 pt-2 text-[10px] leading-snug text-slate-500">
@@ -881,11 +917,15 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
               </p>
               {summary.connected > 0 ? (
                 <div className="border-t border-slate-100 pt-2 text-[10px] leading-snug text-slate-500">
-                  <div className="flex items-center justify-center gap-1">
-                    <ArrowUpRight className="h-3 w-3 shrink-0 text-emerald-500" />
+                  <div className={cn("flex items-center justify-center gap-1 font-medium", getGrowthDeltaStyles(getGrowthDirection(summary.averageGrowth)))}>
+                    {getGrowthDirection(summary.averageGrowth) === "down" ? (
+                      <ArrowDownRight className="h-3 w-3 shrink-0" />
+                    ) : (
+                      <ArrowUpRight className="h-3 w-3 shrink-0" />
+                    )}
                     <span>{formatDelta(summary.averageGrowth)} avg</span>
                   </div>
-                  <p>engagement lift</p>
+                  <p className="text-slate-500">engagement lift</p>
                 </div>
               ) : (
                 <p className="border-t border-slate-100 pt-2 text-[10px] leading-snug text-slate-500">
@@ -925,11 +965,11 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
-                <span className="text-3xl font-semibold">
-                  {summary.averageGrowth.toFixed(1)}%
+                <span className="text-3xl font-semibold text-slate-950">
+                  {formatDelta(summary.averageGrowth)}
                 </span>
-                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-                  +{timeRange}
+                <Badge className={cn(getGrowthBadgeStyles(getGrowthDirection(summary.averageGrowth)))}>
+                  {timeRange}
                 </Badge>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
@@ -947,8 +987,12 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
             <CardContent>
               <div className="text-2xl font-semibold">{summary.bestPlatform}</div>
               {summary.connected > 0 ? (
-                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                  <ArrowUpRight className="h-4 w-4 text-emerald-500" />
+                <div className={cn("mt-2 flex items-center gap-2 text-xs font-medium", getGrowthDeltaStyles(getGrowthDirection(summary.averageGrowth)))}>
+                  {getGrowthDirection(summary.averageGrowth) === "down" ? (
+                    <ArrowDownRight className="h-4 w-4" />
+                  ) : (
+                    <ArrowUpRight className="h-4 w-4" />
+                  )}
                   {formatDelta(summary.averageGrowth)} avg engagement lift
                 </div>
               ) : (
@@ -1002,8 +1046,8 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
             </div>
                 <div className="flex flex-wrap items-center gap-2">
                 {gbp.status === "connected" && (
-                  <Badge className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-700 hover:bg-emerald-100">
-                    {Number(filteredGbp?.engagementGrowth ?? gbp?.engagementGrowth ?? 0).toFixed(1)}% growth
+                  <Badge className={cn("rounded-full px-3 py-1 text-sm font-medium", getGrowthBadgeStyles(getGrowthDirection(Number(filteredGbp?.engagementGrowth ?? gbp?.engagementGrowth ?? 0))))}>
+                    {formatDelta(Number(filteredGbp?.engagementGrowth ?? gbp?.engagementGrowth ?? 0))} growth
                   </Badge>
                 )}
                 <Button variant="ghost" size="sm" className="text-primary hover:text-primary/90" onClick={() => onViewGbpReport?.()}>
@@ -1038,7 +1082,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                               <div className="mt-0.5 flex items-baseline gap-2">
                                 <span className="text-base font-semibold tabular-nums">{m.value}</span>
                                 {m.delta && (
-                                  <span className="text-xs font-medium text-emerald-600">{m.delta}</span>
+                                  <span className={cn("text-xs font-medium", getGrowthDeltaStyles(m.growth_direction))}>{m.delta}</span>
                                 )}
                           </div>
                         </div>
@@ -1193,10 +1237,12 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                     <div>
                       <p className="text-xs text-muted-foreground">Engagement growth</p>
                       <div className="flex items-center gap-2">
-                        <span className="text-2xl font-semibold">{platform.engagementGrowth.toFixed(1)}%</span>
-                        <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                        <span className={cn("text-2xl font-semibold", getGrowthDeltaStyles(getGrowthDirection(platform.engagementGrowth)))}>
                           {formatDelta(platform.engagementGrowth)}
-                      </Badge>
+                        </span>
+                        <Badge className={cn(getGrowthBadgeStyles(getGrowthDirection(platform.engagementGrowth)))}>
+                          {formatDelta(platform.engagementGrowth)}
+                        </Badge>
                       </div>
                     </div>
                     <PlatformEngagementChart data={platform.miniChart} timeRange={timeRange} platformName={platform.name} />
@@ -1210,7 +1256,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                         <div className="flex items-center gap-2">
                           <span className="text-lg font-semibold">{metric.value}</span>
                           {metric.delta && (
-                            <span className="text-xs text-emerald-600">{metric.delta}</span>
+                            <span className={cn("text-xs font-medium", getGrowthDeltaStyles(metric.growth_direction))}>{metric.delta}</span>
                           )}
                         </div>
                       </div>
@@ -1226,7 +1272,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                           <p className="text-muted-foreground">{metric.label}</p>
                           <div className="flex items-center gap-1">
                             <span className="text-sm font-semibold">{metric.value}</span>
-                            {metric.delta && <span className="text-emerald-600">{metric.delta}</span>}
+                            {metric.delta && <span className={cn("font-medium", getGrowthDeltaStyles(metric.growth_direction))}>{metric.delta}</span>}
             </div>
           </div>
                       ))}
@@ -1328,7 +1374,7 @@ export function OverviewTab({ businessName, businessId, isLoading = false, error
                         <div className="mt-1 flex flex-wrap items-baseline gap-2">
                           <span className="text-lg font-semibold text-foreground">{metric.value}</span>
                           {metric.delta && (
-                            <span className="text-xs font-medium text-emerald-600">{metric.delta}</span>
+                            <span className={cn("text-xs font-medium", getGrowthDeltaStyles(metric.growth_direction))}>{metric.delta}</span>
                           )}
                         </div>
                       </div>

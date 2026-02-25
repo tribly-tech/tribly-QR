@@ -2319,6 +2319,8 @@ export default function BusinessDetailPage() {
             {business && (
               <GBPHealthTab
                 businessName={business.name}
+                businessId={business?.id ?? businessSlug}
+                placeId={business?.googlePlaceId}
               />
             )}
           </TabsContent>
@@ -2326,7 +2328,10 @@ export default function BusinessDetailPage() {
           {/* Recommended Actions Tab */}
           <TabsContent value="recommended-actions" className="space-y-6 mt-0">
             {business && (
-              <RecommendedActionsTab businessName={business.name} />
+              <RecommendedActionsTab
+                businessName={business.name}
+                placeId={business?.googlePlaceId}
+              />
             )}
           </TabsContent>
 

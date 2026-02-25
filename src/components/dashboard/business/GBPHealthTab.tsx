@@ -2,65 +2,57 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { GBPHealthReportView } from "./GBPHealthReportView";
-import { calculateGBPScore } from "@/components/sales-dashboard";
-import type { GBPAnalysisData } from "@/components/sales-dashboard/types";
+import { GBPHealthReportView, type GBPDiscoveryAndActions } from "./GBPHealthReportView";
+import { useGBPAnalysis } from "@/hooks/useGBPAnalysis";
 import type { Top3InRadiusResult } from "@/components/sales-dashboard/types";
 import { getAuthToken } from "@/lib/auth";
 import { Loader2, AlertCircle } from "lucide-react";
 
 export interface GBPHealthTabProps {
   businessName: string;
+  /** Business ID (slug) to fetch yearly discovery & customer actions from /api/business/[id]/metrics */
+  businessId?: string | null;
   /** Optional place_id to fetch top-3-in-radius; if not provided, top3 is skipped */
   placeId?: string | null;
   /** Optional lat/lng for nearby-rank API */
   location?: { lat: number; lng: number } | null;
 }
 
+/** Maps performance metrics API response to GBPDiscoveryAndActions */
+function mapMetricsToDiscoveryAndActions(data: {
+  discovery?: { searches?: { value?: number }; search_views?: { value?: number }; maps_views?: { value?: number } };
+  customer_actions?: { calls?: { value?: number }; directions?: { value?: number }; website_clicks?: { value?: number } };
+}): GBPDiscoveryAndActions {
+  return {
+    discovery: {
+      searchQueries: data.discovery?.searches?.value ?? null,
+      searchViews: data.discovery?.search_views?.value ?? null,
+      mapViews: data.discovery?.maps_views?.value ?? null,
+    },
+    customerActions: {
+      websiteClicks: data.customer_actions?.website_clicks?.value ?? null,
+      directionRequests: data.customer_actions?.directions?.value ?? null,
+      phoneCalls: data.customer_actions?.calls?.value ?? null,
+    },
+  };
+}
+
 export function GBPHealthTab({
   businessName,
+  businessId = null,
   placeId = null,
   location = null,
 }: GBPHealthTabProps) {
-  const [gbpAnalysisData, setGbpAnalysisData] = useState<GBPAnalysisData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error } = useGBPAnalysis({
+    businessName,
+    placeId,
+    enabled: !!businessName?.trim(),
+  });
+  const gbpAnalysisData = data?.analysisData ?? null;
+
   const [top3Result, setTop3Result] = useState<Top3InRadiusResult | null>(null);
   const [top3Loading, setTop3Loading] = useState(false);
-
-  useEffect(() => {
-    if (!businessName?.trim()) {
-      setLoading(false);
-      setError("Business name is required");
-      return;
-    }
-
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    calculateGBPScore(businessName, null)
-      .then((result) => {
-        if (!cancelled) {
-          setGbpAnalysisData(result.analysisData);
-          setError(null);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          console.error("GBP health analysis failed:", err);
-          setError(err instanceof Error ? err.message : "Failed to load Google Business Health analysis");
-          setGbpAnalysisData(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [businessName]);
+  const [discoveryAndActions, setDiscoveryAndActions] = useState<GBPDiscoveryAndActions | null>(null);
 
   // Optional: fetch top 3 within 5km when we have place_id or location
   useEffect(() => {
@@ -105,6 +97,38 @@ export function GBPHealthTab({
       .finally(() => setTop3Loading(false));
   }, [gbpAnalysisData, placeId, location?.lat, location?.lng]);
 
+  // Fetch yearly discovery & customer actions from metrics API (when GBP is connected)
+  useEffect(() => {
+    if (!businessId?.trim()) {
+      setDiscoveryAndActions(null);
+      return;
+    }
+    let cancelled = false;
+    const authToken = getAuthToken();
+    const headers: HeadersInit = {};
+    if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+
+    fetch(`/api/business/${encodeURIComponent(businessId)}/metrics?filter=yearly`, { headers })
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error((body as { message?: string }).message ?? "Failed to load metrics");
+        }
+        return res.json();
+      })
+      .then((metrics) => {
+        if (!cancelled && metrics?.discovery && metrics?.customer_actions) {
+          setDiscoveryAndActions(mapMetricsToDiscoveryAndActions(metrics));
+        } else {
+          setDiscoveryAndActions(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setDiscoveryAndActions(null);
+      });
+    return () => { cancelled = true; };
+  }, [businessId]);
+
   if (loading) {
     return (
       <Card>
@@ -137,6 +161,7 @@ export function GBPHealthTab({
       gbpAnalysisData={gbpAnalysisData}
       top3Result={top3Result}
       top3Loading={top3Loading}
+      discoveryAndActions={discoveryAndActions}
     />
   );
 }
