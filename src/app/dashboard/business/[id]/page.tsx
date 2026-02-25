@@ -18,7 +18,7 @@ import { getWhatsAppLinkWithMessage, parseWhatsAppNumberFromUrl } from "@/lib/wh
 import {
   updateBusinessEditOverrides,
 } from "@/lib/business-local-storage";
-import { getStoredUser, logout, setStoredUser, getAuthToken } from "@/lib/auth";
+import { logout, setStoredUser, getAuthToken } from "@/lib/auth";
 import { useBusinessData } from "@/hooks/useBusinessData";
 import { BUSINESS_MAIN_TABS, BUSINESS_SETTINGS_SUB_TABS } from "@/lib/routes";
 import { categorySuggestions, serviceSuggestions } from "@/lib/category-suggestions";
@@ -110,7 +110,6 @@ export default function BusinessDetailPage() {
     qrCodeError,
     setQrCodeError,
     currentUser,
-    setCurrentUser,
     apiReviews,
     isLoadingReviews,
     reviewError,
@@ -362,158 +361,6 @@ export default function BusinessDetailPage() {
       setShowToast(true);
     }
   }, [reviewError]);
-    const loadBusinessData = async () => {
-      setLoadError(null);
-      setIsLoading(true);
-
-      // First, try to find business by slug (existing businesses)
-      let businessData = getBusinessBySlug(businessSlug, mockBusinesses);
-
-      // If not found by slug, try as ID (for backward compatibility)
-      if (!businessData) {
-        businessData = mockBusinesses.find(b => b.id === businessSlug) || undefined;
-      }
-
-      // If still not found, treat it as a QR ID and fetch from API
-      if (!businessData) {
-        setIsQRId(true);
-        try {
-          const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
-          const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/scan?qr_id=${businessSlug}`);
-
-          if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            setLoadError(errData.message || "Failed to load business. Please check your connection and try again.");
-            setIsLoading(false);
-            return;
-          }
-
-          const apiResponse = await response.json();
-          const qrData = apiResponse.data;
-
-          const normalizedReviewUrl = normalizeReviewUrl(qrData.business_review_url);
-
-          // Map API response to Business type
-          const mappedBusiness: Business = {
-            id: businessSlug,
-            name: qrData.business_name || "",
-            status: "active",
-            category: (qrData.business_category as BusinessCategory) || "other",
-            email: qrData.business_contact?.email || "",
-            phone: qrData.business_contact?.phone || "",
-            address: qrData.business_address?.address_line1 || "",
-            city: qrData.business_address?.city || "",
-            area: qrData.business_address?.area || "",
-            pincode: qrData.business_address?.pincode || qrData.business_address?.postal_code || "",
-            overview: qrData.business_description || "",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            reviewUrl: normalizedReviewUrl,
-            googleBusinessReviewLink: qrData.business_google_review_url || "",
-            googlePlaceId: qrData.google_place_id || qrData.place_id || undefined,
-            instagramUrl: qrData.instagram_url || undefined,
-            youtubeUrl: qrData.youtube_url || undefined,
-            whatsappNumber: parseWhatsAppNumberFromUrl(qrData.whatsapp_url || "") || undefined,
-            whatsappUrl: qrData.whatsapp_url || undefined,
-            keywords: Array.isArray(qrData.business_tags) ? qrData.business_tags : [],
-            services: Array.isArray(qrData.business_services) ? qrData.business_services : [],
-            feedbackTone: "professional",
-            autoReplyEnabled: false,
-            paymentPlan: (qrData.plan === "qr-plus" || qrData.plan === "qr-basic") ? qrData.plan : undefined,
-            totalReviews: 0,
-            activeReviews: 0,
-            inactiveReviews: 0,
-            reviewsInQueue: 0,
-          };
-
-          // Merge with localStorage overrides (user may have saved when API didn't persist)
-          const qrOverrides = typeof window !== "undefined"
-            ? getBusinessEditOverrides(businessSlug)
-            : null;
-          const { business: mergedQrBusiness, website: mergedQrWebsite } =
-            mergeBusinessWithOverrides(mappedBusiness, qrOverrides, qrData.business_website || "");
-          setBusiness(mergedQrBusiness);
-          setWebsite(mergedQrWebsite || qrData.business_website || "");
-          setReviewUrl(normalizedReviewUrl);
-
-          // Use business_qr_code_url from API if available, otherwise generate QR code
-          if (qrData.business_qr_code_url) {
-            setQrCodeDataUrl(qrData.business_qr_code_url);
-            setBusiness((prev) => prev ? { ...prev, qrCodeUrl: qrData.business_qr_code_url } : null);
-          } else if (qrData.business_review_url) {
-            // Fallback: Generate QR code if review URL exists but no QR code URL provided
-            setQrCodeError(null);
-            generateQRCodeDataUrl(qrData.business_review_url).then((dataUrl) => {
-              setQrCodeDataUrl(dataUrl);
-              setQrCodeError(null);
-              setBusiness((prev) => prev ? { ...prev, qrCodeUrl: dataUrl } : null);
-            }).catch((error) => {
-              console.error("Error generating QR code:", error);
-              setQrCodeError("Failed to generate QR code");
-            });
-          }
-
-          const user = getStoredUser();
-          setCurrentUser(user);
-          setIsLoading(false);
-
-          // Fetch manual reviews from API
-          await fetchManualReviews(businessSlug);
-          return;
-        } catch (error) {
-          console.error("Error fetching business QR data:", error);
-          setLoadError("Failed to load business. Please check your connection and try again.");
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // Existing business logic (mock businesses)
-      if (businessData) {
-        const overrides = getBusinessEditOverrides(businessData.id);
-        const { business: mergedBusiness, website: mergedWebsite } =
-          mergeBusinessWithOverrides(businessData, overrides);
-        setBusiness(mergedBusiness);
-        if (mergedWebsite) setWebsite(mergedWebsite);
-
-        // Check if logged-in user is the business owner
-        const user = getStoredUser();
-        if (user && user.role === "business" && user.businessId === businessData.id) {
-          setIsBusinessOwner(true);
-        }
-        setCurrentUser(user);
-
-        // Generate unique review URL and QR code
-        const code = generateShortUrlCode(businessData.id);
-        const url = generateReviewUrl(code);
-        setReviewUrl(url);
-
-        // Generate QR code
-        setQrCodeError(null);
-        generateQRCodeDataUrl(url).then((dataUrl) => {
-          setQrCodeDataUrl(dataUrl);
-          setQrCodeError(null);
-          // Update business with review URL and QR code
-          setBusiness((prev) => prev ? { ...prev, reviewUrl: url, qrCodeUrl: dataUrl } : null);
-        }).catch((error) => {
-          console.error("Error generating QR code:", error);
-          setQrCodeError("Failed to generate QR code");
-        });
-      } else {
-        // Business not found, redirect based on user role
-        const user = getStoredUser();
-        if (user && user.role === "business") {
-          // Business owner trying to access non-existent business, redirect to login
-          router.push("/login");
-        } else {
-        router.push("/dashboard/admin");
-        }
-      }
-      setIsLoading(false);
-    };
-
-    loadBusinessData();
-  }, [businessSlug, router, loadRetryKey]);
 
   // Initialize last-saved snapshots when business loads (for change detection)
   useEffect(() => {
