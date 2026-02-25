@@ -15,6 +15,12 @@ import { TypingAnimation } from "@/components/ui";
 import { FAQAccordion } from "@/components/ui";
 import { ChevronIcon } from "@/components/ui";
 import { BRAND_COLORS } from "@/lib/constants/brand";
+import {
+  useLeadsSession,
+  useGeolocation,
+  useLeadsAutocomplete,
+  useLeadsReport,
+} from "@/hooks";
 
 const PFB_IMAGES = [
   "pfb06.png",
@@ -26,50 +32,18 @@ const PFB_IMAGES = [
 ] as const;
 const PFB_IMAGES_DUPLICATED = [...PFB_IMAGES, ...PFB_IMAGES];
 
-/** Mock business search recommendations (title + address) */
-const MOCK_BUSINESS_RECOMMENDATIONS = [
-  {
-    id: "1",
-    title: "Mia by Tanishq - Asilmetta, Visakhapatnam",
-    address:
-      "2, Sampath Vinayaka Temple Rd, near Sampath Vinayaka Temple, CBM Compound, Asilmetta, Visakhapatnam, Visakhapatnam Urban, Andhra Pradesh 530003, India",
-  },
-  {
-    id: "2",
-    title: "MAMMA MIA STREET EATS",
-    address:
-      "P8F4+9J8, Dwaraka Nagar, Visakhapatnam, Visakhapatnam Urban, Andhra Pradesh 530016, India",
-  },
-  {
-    id: "3",
-    title: "Mia by Tanishq - Kakinada",
-    address:
-      "Door No: 20-1-46, Revenue Ward, 14, Main Rd, opp. to SRMT, Rama Rao Peta, Kakinada, Andhra Pradesh 533001, India",
-  },
-  {
-    id: "4",
-    title: "Tanishq - Vijayawada",
-    address: "MG Road, Governorpet, Vijayawada, Andhra Pradesh 520002, India",
-  },
-  {
-    id: "5",
-    title: "Mia Café - Hyderabad",
-    address: "Jubilee Hills, Road No. 36, Hyderabad, Telangana 500033, India",
-  },
-  {
-    id: "6",
-    title: "Mia Salon & Spa",
-    address: "Banjara Hills, Hyderabad, Telangana 500034, India",
-  },
-];
-
-type BusinessRecommendation = (typeof MOCK_BUSINESS_RECOMMENDATIONS)[number];
-
 export default function LandingPage() {
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const [selectedSuggestion, setSelectedSuggestion] = useState<{
+    place_id: string;
+    main_text: string;
+    secondary_text: string;
+  } | null>(null);
+  const [reportSubmitSuccess, setReportSubmitSuccess] = useState(false);
   const [showRecommendations, setShowRecommendations] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<{
     top: number;
@@ -83,20 +57,49 @@ export default function LandingPage() {
   const [reportStep, setReportStep] = useState<"search" | "contact">("search");
   const [reportWhatsApp, setReportWhatsApp] = useState("");
   const [reportEmail, setReportEmail] = useState("");
+  const [reportSubmitError, setReportSubmitError] = useState<string | null>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const searchAnchorRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLUListElement>(null);
   const searchOverlayInputRef = useRef<HTMLInputElement>(null);
   const searchOverlayCloseTimeoutRef = useRef<number | null>(null);
 
+  const { sessionToken } = useLeadsSession();
+  const { lat, lng, permission: geoPermission, requestPermission } = useGeolocation();
+  const {
+    suggestions,
+    loading: autocompleteLoading,
+    error: autocompleteError,
+    search: autocompleteSearch,
+  } = useLeadsAutocomplete({
+    sessionToken,
+    debounceMs: 400,
+    minLength: 3,
+    lat: lat ?? undefined,
+    lng: lng ?? undefined,
+    radius: 50000,
+  });
+  const { submitReport, loading: reportLoading } = useLeadsReport();
+
   const recommendations = useMemo(() => {
-    const q = searchValue.trim().toLowerCase();
-    if (!q) return [];
-    return MOCK_BUSINESS_RECOMMENDATIONS.filter(
-      (b) =>
-        b.title.toLowerCase().includes(q) || b.address.toLowerCase().includes(q)
-    );
-  }, [searchValue]);
+    if (selectedSuggestion) return [selectedSuggestion];
+    return suggestions;
+  }, [suggestions, selectedSuggestion]);
+
+  useEffect(() => {
+    autocompleteSearch(searchValue);
+  }, [searchValue, autocompleteSearch]);
+
+  useEffect(() => {
+    if (
+      isSearchOverlayOpen &&
+      geoPermission !== "denied" &&
+      lat === null &&
+      lng === null
+    ) {
+      requestPermission();
+    }
+  }, [isSearchOverlayOpen, geoPermission, lat, lng, requestPermission]);
 
   const updateDropdownPosition = () => {
     const el = searchAnchorRef.current;
@@ -175,30 +178,50 @@ export default function LandingPage() {
       setReportStep("search");
       setReportWhatsApp("");
       setReportEmail("");
+      setSelectedPlaceId(null);
+      setSelectedSuggestion(null);
+      setReportSubmitError(null);
+      setReportSubmitSuccess(false);
     }, 280);
   };
 
   const handleGetReportClick = () => {
-    if (!searchValue.trim()) return;
+    if (!searchValue.trim() || !selectedPlaceId) return;
     setReportStep("contact");
+    setReportSubmitError(null);
   };
 
-  const handleSendReportSubmit = () => {
+  const handleSendReportSubmit = async () => {
     const phone = reportWhatsApp.trim();
     const email = reportEmail.trim();
     if (!phone && !email) return;
-    sessionStorage.setItem(
-      "reportContactDetails",
-      JSON.stringify({
-        businessName: searchValue.trim(),
-        whatsappPhone: phone,
-        email,
-      })
-    );
-    closeSearchOverlay();
-    router.push(
-      `/sales-dashboard?business=${encodeURIComponent(searchValue.trim())}`
-    );
+    if (!selectedPlaceId) {
+      setReportSubmitError("Please select a business from the search results.");
+      return;
+    }
+    setReportSubmitError(null);
+    const result = await submitReport({
+      place_id: selectedPlaceId,
+      email: email || undefined,
+      phone: phone || undefined,
+    });
+    if (result.success) {
+      sessionStorage.setItem(
+        "reportContactDetails",
+        JSON.stringify({
+          businessName: searchValue.trim(),
+          whatsappPhone: phone,
+          email,
+        })
+      );
+      setReportSubmitSuccess(true);
+    } else {
+      setReportSubmitError(
+        result.isAlreadyTaken
+          ? "Request already taken, someone from the team will soon contact you."
+          : result.message
+      );
+    }
   };
 
   useEffect(() => {
@@ -677,6 +700,8 @@ export default function LandingPage() {
                             onClick={(e) => {
                               e.stopPropagation();
                               setSearchValue("");
+                              setSelectedPlaceId(null);
+                              setSelectedSuggestion(null);
                             }}
                             className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a1a] transition-colors"
                             aria-label="Clear search"
@@ -731,9 +756,9 @@ export default function LandingPage() {
                           borderWidth: "0 1px 1px 1px",
                         }}
                       >
-                        {recommendations.map((item: BusinessRecommendation) => (
+                        {recommendations.map((item) => (
                           <li
-                            key={item.id}
+                            key={item.place_id}
                             role="option"
                             tabIndex={0}
                             className="px-4 py-3 cursor-pointer border-b last:border-b-0 transition-colors"
@@ -747,21 +772,33 @@ export default function LandingPage() {
                               e.currentTarget.style.backgroundColor = "";
                             }}
                             onClick={() => {
-                              setSearchValue(item.title);
+                              setSearchValue(item.main_text);
+                              setSelectedPlaceId(item.place_id);
+                              setSelectedSuggestion({
+                                place_id: item.place_id,
+                                main_text: item.main_text,
+                                secondary_text: item.secondary_text,
+                              });
                               setShowRecommendations(false);
                             }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
-                                setSearchValue(item.title);
+                                setSearchValue(item.main_text);
+                                setSelectedPlaceId(item.place_id);
+                                setSelectedSuggestion({
+                                  place_id: item.place_id,
+                                  main_text: item.main_text,
+                                  secondary_text: item.secondary_text,
+                                });
                                 setShowRecommendations(false);
                               }
                             }}
                           >
                             <p className="font-semibold text-[#1a1a1a] text-sm md:text-base leading-snug">
-                              {item.title}
+                              {item.main_text}
                             </p>
                             <p className="text-[#6b7280] text-xs md:text-sm font-normal leading-snug mt-0.5">
-                              {item.address}
+                              {item.secondary_text}
                             </p>
                           </li>
                         ))}
@@ -2298,7 +2335,11 @@ export default function LandingPage() {
                 type="button"
                 onClick={
                   reportStep === "contact"
-                    ? () => setReportStep("search")
+                    ? () => {
+                        setReportStep("search");
+                        setReportSubmitSuccess(false);
+                        setReportSubmitError(null);
+                      }
                     : closeSearchOverlay
                 }
                 className="p-2 -ml-2 rounded-full text-[#9747ff] hover:bg-white/60 transition-colors"
@@ -2327,53 +2368,86 @@ export default function LandingPage() {
             {reportStep === "contact" ? (
               /* Contact details step: WhatsApp + Email — centered */
               <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-[200px] py-6 flex flex-col items-center justify-center text-center">
-                <p className="text-[#6b7280] text-sm mb-4 max-w-md">
-                  We&apos;ll send the report for <strong className="text-[#1a1a1a]">{searchValue}</strong>. Enter at least one contact.
-                </p>
-                <div className="space-y-4 max-w-md w-full">
-                  <label className="block text-center">
-                    <span className="text-sm font-medium text-[#1a1a1a] block mb-1.5">
-                      WhatsApp / Phone number
-                    </span>
-                    <input
-                      type="tel"
-                      placeholder="e.g. +91 98765 43210"
-                      value={reportWhatsApp}
-                      onChange={(e) => setReportWhatsApp(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border bg-white text-[#1a1a1a] placeholder:text-[#9ca3af] outline-none focus:ring-2 focus:ring-[#9747ff]/30 text-center"
-                      style={{ borderColor: BRAND_COLORS.primary }}
-                    />
-                  </label>
-                  <label className="block text-center">
-                    <span className="text-sm font-medium text-[#1a1a1a] block mb-1.5">
-                      Email
-                    </span>
-                    <input
-                      type="email"
-                      placeholder="you@example.com"
-                      value={reportEmail}
-                      onChange={(e) => setReportEmail(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border bg-white text-[#1a1a1a] placeholder:text-[#9ca3af] outline-none focus:ring-2 focus:ring-[#9747ff]/30 text-center"
-                      style={{ borderColor: BRAND_COLORS.primary }}
-                    />
-                  </label>
-                </div>
-                <div className="mt-8 md:mt-10 flex justify-center">
-                  <button
-                    type="button"
-                    disabled={!reportWhatsApp.trim() && !reportEmail.trim()}
-                    className="w-full md:w-auto md:min-w-[200px] flex items-center justify-center gap-2 px-6 py-4 bg-white rounded-full font-medium transition-colors font-clash-grotesk border disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#f7f1ff]"
-                    style={{
-                      color: BRAND_COLORS.primary,
-                      borderColor: BRAND_COLORS.primary,
-                      boxShadow: `0px 4px 0px 0px ${BRAND_COLORS.primaryDark}`,
-                    }}
-                    onClick={handleSendReportSubmit}
-                  >
-                    Send me the report
-                    <ChevronIcon className="w-5 h-5 md:w-6 md:h-6" />
-                  </button>
-                </div>
+                {reportSubmitSuccess ? (
+                  <>
+                    <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "rgba(34, 197, 94, 0.2)" }}>
+                      <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <p className="text-[#1a1a1a] font-semibold text-lg mb-2">
+                      Successfully registered your interest
+                    </p>
+                    <p className="text-[#6b7280] text-sm mb-6 max-w-md">
+                      Report will be sent to the given contact.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={closeSearchOverlay}
+                      className="w-full md:w-auto md:min-w-[200px] flex items-center justify-center gap-2 px-6 py-4 bg-white rounded-full font-medium transition-colors font-clash-grotesk border hover:bg-[#f7f1ff]"
+                      style={{
+                        color: BRAND_COLORS.primary,
+                        borderColor: BRAND_COLORS.primary,
+                        boxShadow: `0px 4px 0px 0px ${BRAND_COLORS.primaryDark}`,
+                      }}
+                    >
+                      Close
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[#6b7280] text-sm mb-4 max-w-md">
+                      We&apos;ll send the report for <strong className="text-[#1a1a1a]">{searchValue}</strong>. Enter at least one contact.
+                    </p>
+                    <div className="space-y-4 max-w-md w-full">
+                      <label className="block text-center">
+                        <span className="text-sm font-medium text-[#1a1a1a] block mb-1.5">
+                          WhatsApp / Phone number
+                        </span>
+                        <input
+                          type="tel"
+                          placeholder="e.g. +91 98765 43210"
+                          value={reportWhatsApp}
+                          onChange={(e) => setReportWhatsApp(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border bg-white text-[#1a1a1a] placeholder:text-[#9ca3af] outline-none focus:ring-2 focus:ring-[#9747ff]/30 text-center"
+                          style={{ borderColor: BRAND_COLORS.primary }}
+                        />
+                      </label>
+                      <label className="block text-center">
+                        <span className="text-sm font-medium text-[#1a1a1a] block mb-1.5">
+                          Email
+                        </span>
+                        <input
+                          type="email"
+                          placeholder="you@example.com"
+                          value={reportEmail}
+                          onChange={(e) => setReportEmail(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border bg-white text-[#1a1a1a] placeholder:text-[#9ca3af] outline-none focus:ring-2 focus:ring-[#9747ff]/30 text-center"
+                          style={{ borderColor: BRAND_COLORS.primary }}
+                        />
+                      </label>
+                    </div>
+                    {reportSubmitError && (
+                      <p className="text-[#6b7280] text-sm mt-4 max-w-md">{reportSubmitError}</p>
+                    )}
+                    <div className="mt-8 md:mt-10 flex justify-center">
+                      <button
+                        type="button"
+                        disabled={(!reportWhatsApp.trim() && !reportEmail.trim()) || reportLoading}
+                        className="w-full md:w-auto md:min-w-[200px] flex items-center justify-center gap-2 px-6 py-4 bg-white rounded-full font-medium transition-colors font-clash-grotesk border disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#f7f1ff]"
+                        style={{
+                          color: BRAND_COLORS.primary,
+                          borderColor: BRAND_COLORS.primary,
+                          boxShadow: `0px 4px 0px 0px ${BRAND_COLORS.primaryDark}`,
+                        }}
+                        onClick={handleSendReportSubmit}
+                      >
+                        {reportLoading ? "Sending..." : "Send me the report"}
+                        <ChevronIcon className="w-5 h-5 md:w-6 md:h-6" />
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <>
@@ -2408,6 +2482,8 @@ export default function LandingPage() {
                   value={searchValue}
                   onChange={(e) => {
                     setSearchValue(e.target.value);
+                    setSelectedPlaceId(null);
+                    setSelectedSuggestion(null);
                     setShowRecommendations(true);
                   }}
                   autoComplete="off"
@@ -2420,7 +2496,11 @@ export default function LandingPage() {
                 {searchValue && (
                   <button
                     type="button"
-                    onClick={() => setSearchValue("")}
+                    onClick={() => {
+                      setSearchValue("");
+                      setSelectedPlaceId(null);
+                      setSelectedSuggestion(null);
+                    }}
                     className="flex-shrink-0 w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a1a] transition-colors"
                     aria-label="Clear search"
                   >
@@ -2442,7 +2522,7 @@ export default function LandingPage() {
               </div>
               <button
                 type="button"
-                disabled={!searchValue.trim()}
+                disabled={!selectedPlaceId}
                 className="hidden md:flex items-center justify-center gap-2 px-6 py-4 bg-white rounded-full font-medium transition-colors font-clash-grotesk border hover:bg-[#f7f1ff] shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   color: BRAND_COLORS.primary,
@@ -2460,28 +2540,46 @@ export default function LandingPage() {
               id="search-overlay-results"
               className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 md:px-[200px] pb-24 md:pb-8"
             >
+              {autocompleteError && (
+                <p className="text-red-600 text-sm py-2 px-4">{autocompleteError}</p>
+              )}
+              {autocompleteLoading && searchValue.trim().length >= 3 && (
+                <p className="text-[#6b7280] text-sm py-4 px-4">Searching...</p>
+              )}
               {recommendations.length > 0 ? (
                 <ul role="listbox" className="space-y-1">
-                  {recommendations.map((item: BusinessRecommendation) => (
+                  {recommendations.map((item) => (
                     <li
-                      key={item.id}
+                      key={item.place_id}
                       role="option"
                       tabIndex={0}
                       className="px-4 py-3 rounded-2xl cursor-pointer border border-transparent hover:border-[#9747ff]/30 hover:bg-white/80 transition-colors"
                       onClick={() => {
-                        setSearchValue(item.title);
+                        setSearchValue(item.main_text);
+                        setSelectedPlaceId(item.place_id);
+                        setSelectedSuggestion({
+                          place_id: item.place_id,
+                          main_text: item.main_text,
+                          secondary_text: item.secondary_text,
+                        });
                       }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
-                          setSearchValue(item.title);
+                          setSearchValue(item.main_text);
+                          setSelectedPlaceId(item.place_id);
+                          setSelectedSuggestion({
+                            place_id: item.place_id,
+                            main_text: item.main_text,
+                            secondary_text: item.secondary_text,
+                          });
                         }
                       }}
                     >
                       <p className="font-semibold text-[#1a1a1a] text-sm md:text-base leading-snug">
-                        {item.title}
+                        {item.main_text}
                       </p>
                       <p className="text-[#6b7280] text-xs md:text-sm font-normal leading-snug mt-0.5 line-clamp-2">
-                        {item.address}
+                        {item.secondary_text}
                       </p>
                     </li>
                   ))}
@@ -2509,7 +2607,7 @@ export default function LandingPage() {
             <div className="md:hidden shrink-0 px-4 md:px-[200px] py-4 md:py-5 border-t border-[#e8ddff]/60 bg-[#f7f1ff]/80 backdrop-blur-sm">
               <button
                 type="button"
-                disabled={!searchValue.trim()}
+                disabled={!selectedPlaceId}
                 className="w-full flex items-center justify-center gap-2 px-6 py-3 md:py-4 bg-white rounded-full font-medium transition-colors font-clash-grotesk border hover:bg-[#f7f1ff] disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   color: BRAND_COLORS.primary,

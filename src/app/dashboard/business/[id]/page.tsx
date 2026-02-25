@@ -12,17 +12,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { mockBusinesses, getReviewsByBusinessId } from "@/lib/mock-data";
-import { Business, BusinessCategory, ReviewCategory, Review } from "@/lib/types";
-import { generateShortUrlCode, generateReviewUrl, generateQRCodeDataUrl, downloadQRCodeAsPNG } from "@/lib/qr-utils";
+import { Business, BusinessCategory } from "@/lib/types";
+import { generateQRCodeDataUrl, downloadQRCodeAsPNG } from "@/lib/qr-utils";
 import { getWhatsAppLinkWithMessage, parseWhatsAppNumberFromUrl } from "@/lib/whatsapp-utils";
-import { getBusinessBySlug } from "@/lib/business-slug";
 import {
-  getBusinessEditOverrides,
   updateBusinessEditOverrides,
-  mergeBusinessWithOverrides,
 } from "@/lib/business-local-storage";
 import { getStoredUser, logout, setStoredUser, getAuthToken } from "@/lib/auth";
+import { useBusinessData } from "@/hooks/useBusinessData";
 import { BUSINESS_MAIN_TABS, BUSINESS_SETTINGS_SUB_TABS } from "@/lib/routes";
 import { categorySuggestions, serviceSuggestions } from "@/lib/category-suggestions";
 import {
@@ -92,32 +89,41 @@ const MOBILE_MAIN_TAB_ITEMS: Array<{
   { value: "settings", label: "Settings", shortLabel: "Settings", icon: Settings },
 ];
 
-const REVIEW_OLD_BASE = "https://triblyqr.netlify.app/review";
-const REVIEW_NEW_BASE = "https://qr.tribly.ai/review";
-
-function normalizeReviewUrl(url: string | null | undefined): string {
-  if (!url) return "";
-  return url.replace(REVIEW_OLD_BASE, REVIEW_NEW_BASE);
-}
-
 export default function BusinessDetailPage() {
   const router = useRouter();
   const params = useParams();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const businessSlug = params.id as string;
-  const [business, setBusiness] = useState<Business | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+
+  // Business data from API (hook handles fetch, mapping, QR code, reviews)
+  const {
+    business,
+    setBusiness,
+    isLoading,
+    loadError,
+    website,
+    setWebsite,
+    reviewUrl,
+    qrCodeDataUrl,
+    setQrCodeDataUrl,
+    qrCodeError,
+    setQrCodeError,
+    currentUser,
+    setCurrentUser,
+    apiReviews,
+    isLoadingReviews,
+    reviewError,
+    retry: retryLoad,
+  } = useBusinessData(businessSlug);
+
   const [activeTab, setActiveTab] = useState(DEFAULT_TAB);
   const [settingsSubTab, setSettingsSubTab] = useState(DEFAULT_SETTINGS_SUB);
-  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
-  const [reviewUrl, setReviewUrl] = useState<string>("");
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [newKeyword, setNewKeyword] = useState("");
   const [suggestionsLimit, setSuggestionsLimit] = useState(12);
   const [isBusinessOwner, setIsBusinessOwner] = useState(false);
-  const [currentUser, setCurrentUser] = useState<ReturnType<typeof getStoredUser>>(null);
 
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "failed" | "expired">("pending");
@@ -128,10 +134,6 @@ export default function BusinessDetailPage() {
   const [receiptAccordionOpen, setReceiptAccordionOpen] = useState(false);
   const [receiptShareLoading, setReceiptShareLoading] = useState(false);
   const [receiptShareSuccess, setReceiptShareSuccess] = useState(false);
-  const [website, setWebsite] = useState<string>("");
-  const [isQRId, setIsQRId] = useState(false);
-  const [apiReviews, setApiReviews] = useState<Review[]>([]);
-  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
   const [businessServiceInput, setBusinessServiceInput] = useState("");
   const [showBusinessServiceSuggestions, setShowBusinessServiceSuggestions] = useState(false);
   const [aiServiceSuggestions, setAiServiceSuggestions] = useState<string[]>([]);
@@ -142,9 +144,6 @@ export default function BusinessDetailPage() {
   const [isLoadingAIKeywords, setIsLoadingAIKeywords] = useState(false);
   const [aiKeywordSuggestions, setAiKeywordSuggestions] = useState<string[]>([]);
   const [savingSection, setSavingSection] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loadRetryKey, setLoadRetryKey] = useState(0);
-  const [qrCodeError, setQrCodeError] = useState<string | null>(null);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [pendingLeaveAction, setPendingLeaveAction] = useState<{
     type: "main-tab" | "settings-sub" | "route";
@@ -356,7 +355,13 @@ export default function BusinessDetailPage() {
     };
   }, []);
 
+  // Show review error as toast
   useEffect(() => {
+    if (reviewError) {
+      setToastMessage(reviewError);
+      setShowToast(true);
+    }
+  }, [reviewError]);
     const loadBusinessData = async () => {
       setLoadError(null);
       setIsLoading(true);
@@ -635,70 +640,6 @@ export default function BusinessDetailPage() {
     }
   }, [showPaymentDialog, paymentStatus]);
 
-  // Fetch manual reviews from API
-  const fetchManualReviews = async (qrId: string) => {
-    setIsLoadingReviews(true);
-    try {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
-
-      // Get auth token
-      const authToken = getAuthToken();
-      const headers: HeadersInit = {
-        "Content-Type": "application/json",
-      };
-
-      // Add auth token to headers if available
-      if (authToken) {
-        headers["Authorization"] = `Bearer ${authToken}`;
-      }
-
-      const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/manual_reviews?qr_id=${qrId}`, {
-        headers,
-      });
-
-      if (!response.ok) {
-        console.error("Failed to fetch manual reviews");
-        setIsLoadingReviews(false);
-        setToastMessage("Could not load reviews. You can still use the page.");
-        setShowToast(true);
-        return;
-      }
-
-      const apiResponse = await response.json();
-      // API returns array directly or wrapped in data property
-      const reviewsData = Array.isArray(apiResponse) ? apiResponse : (apiResponse.data || apiResponse.reviews || []);
-
-      // Map API response to Review type
-      const mappedReviews: Review[] = reviewsData.map((review: any, index: number) => {
-        // Parse contact - could be email or phone
-        const contact = review.contact || "";
-        const isEmail = contact.includes("@");
-
-        return {
-          id: `api-review-${index}-${review.created_at || Date.now()}`,
-          businessId: qrId,
-          rating: "need-improvement" as const, // Manual reviews are from "Need Improvement" rating
-          feedback: review.feedback || "",
-          category: "customer-experience" as ReviewCategory, // Default category
-          customerName: review.name || "",
-          customerEmail: isEmail ? contact : undefined,
-          customerPhone: !isEmail ? contact : undefined,
-          status: "pending" as const,
-          autoReplySent: false,
-          createdAt: review.created_at || new Date().toISOString(),
-        };
-      });
-
-      setApiReviews(mappedReviews);
-    } catch (error) {
-      console.error("Error fetching manual reviews:", error);
-      setToastMessage("Could not load reviews. You can still use the page.");
-      setShowToast(true);
-    } finally {
-      setIsLoadingReviews(false);
-    }
-  };
-
   const handleUpdateBusiness = (updates: Partial<Business>) => {
     if (business) {
       setBusiness({ ...business, ...updates });
@@ -706,7 +647,7 @@ export default function BusinessDetailPage() {
   };
 
   const sendKeywordsToAPI = async (keywords: string[]) => {
-    if (!isQRId || !business) return;
+    if (!business) return;
 
     try {
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
@@ -1126,176 +1067,58 @@ export default function BusinessDetailPage() {
   const handleSaveChanges = async (section: string, isAutosave = false) => {
     if (!business) return;
 
-    // If it's a QR ID, save via API
-    if (isQRId) {
-      try {
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+    try {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
 
-        // Prepare payload according to API specification (autosave sends full payload)
-        const payload: any = {
-          name: business.name,
-          description: business.overview || null,
-          website: website || null,
-          email: business.email || null,
-          phone: business.phone || null,
-          category: business.category || null,
-          business_category: business.category || null, // Some APIs expect snake_case
-          google_review_url: business.googleBusinessReviewLink || null,
-          instagram_url: business.instagramUrl || null,
-          youtube_url: business.youtubeUrl || null,
-          whatsapp_url: getWhatsAppLinkWithMessage(business.whatsappNumber || "") || null,
-          business_id: businessSlug,
-          tags: business.keywords || [],
-          services: business.services && business.services.length > 0 ? business.services : [],
-        };
-
-        // Only include address if address_line1 is provided (required field)
-        if (business.address) {
-          const pincode = business.pincode || "";
-          payload.address = {
-            address_line1: business.address,
-            address_line2: null,
-            city: business.city || "",
-            area: business.area || "",
-            pincode,
-            postal_code: pincode, // Some APIs expect postal_code
-          };
-        }
-
-        // Get auth token
-        const authToken = getAuthToken();
-        const headers: HeadersInit = {
-          "Content-Type": "application/json",
-        };
-
-        // Add auth token to headers if available
-        if (authToken) {
-          headers["Authorization"] = `Bearer ${authToken}`;
-        }
-
-        const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/configure_qr`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || "Failed to save business QR configuration");
-        }
-
-        if (!isAutosave) {
-          setToastMessage(`${section} saved successfully!`);
-          setShowToast(true);
-        }
-        updateLastSaved("Business information");
-        updateLastSaved("Business links");
-        updateLastSaved("Auto-reply settings");
-        updateLastSaved("Keywords");
-        // Persist to localStorage as fallback (in case API doesn't return persisted data)
-        if (section === "Business information" || isAutosave) {
-          updateBusinessEditOverrides(businessSlug, {
-            name: business.name,
-            category: business.category,
-            email: business.email,
-            phone: business.phone,
-            address: business.address,
-            city: business.city,
-            area: business.area,
-            pincode: business.pincode,
-            overview: business.overview,
-            services: business.services,
-          });
-        }
-        if (section === "Business links" || isAutosave) {
-          updateBusinessEditOverrides(businessSlug, {
-            googleBusinessReviewLink: business.googleBusinessReviewLink,
-            googlePlaceId: business.googlePlaceId,
-            instagramUrl: business.instagramUrl,
-            youtubeUrl: business.youtubeUrl,
-            whatsappNumber: business.whatsappNumber,
-            website,
-          });
-        }
-        // Refetch to get latest from server (e.g. pincode persisted correctly)
-        try {
-          const refetchRes = await fetch(
-            `${apiBaseUrl}/dashboard/v1/business_qr/scan?qr_id=${businessSlug}`
-          );
-          if (refetchRes.ok) {
-            const refetchJson = await refetchRes.json();
-            const d = refetchJson.data;
-            if (d) {
-              setBusiness((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      name: d.business_name ?? prev.name,
-                      email: d.business_contact?.email ?? prev.email,
-                      phone: d.business_contact?.phone ?? prev.phone,
-                      address: d.business_address?.address_line1 ?? prev.address,
-                      city: d.business_address?.city ?? prev.city,
-                      area: d.business_address?.area ?? prev.area,
-                      pincode:
-                        d.business_address?.pincode ??
-                        d.business_address?.postal_code ??
-                        prev.pincode,
-                      overview: d.business_description ?? prev.overview,
-                      googleBusinessReviewLink:
-                        d.business_google_review_url ??
-                        prev.googleBusinessReviewLink,
-                      instagramUrl: d.instagram_url ?? prev.instagramUrl,
-                      youtubeUrl: d.youtube_url ?? prev.youtubeUrl,
-                      whatsappNumber: parseWhatsAppNumberFromUrl(d.whatsapp_url ?? "") ?? prev.whatsappNumber,
-                      whatsappUrl: d.whatsapp_url ?? prev.whatsappUrl,
-                      keywords: Array.isArray(d.business_tags)
-                        ? d.business_tags
-                        : prev.keywords,
-                      category:
-                        (d.business_category as BusinessCategory) || prev.category,
-                      // Only overwrite services if API returns a non-empty array (avoid losing just-saved data)
-                      services:
-                        Array.isArray(d.services) && d.services.length > 0
-                          ? d.services
-                          : prev.services,
-                    }
-                  : null
-              );
-              if (d.business_website !== undefined)
-                setWebsite(d.business_website || "");
-            }
-          }
-        } catch {
-          // Ignore refetch errors
-        }
-      } catch (error) {
-        console.error("Error saving business QR configuration:", error);
-        setToastMessage(error instanceof Error ? error.message : "Failed to save changes");
-        setShowToast(true);
-      }
-    } else {
-      // Mock business: persist to localStorage so it survives refresh
-      const overrides: Parameters<typeof updateBusinessEditOverrides>[1] = {
+      // Prepare payload according to API specification (autosave sends full payload)
+      const payload: any = {
         name: business.name,
-        category: business.category,
-        email: business.email,
-        phone: business.phone,
-        address: business.address,
-        city: business.city,
-        area: business.area,
-        pincode: business.pincode,
-        overview: business.overview,
-        services: business.services,
-        googleBusinessReviewLink: business.googleBusinessReviewLink,
-        googlePlaceId: business.googlePlaceId,
-        instagramUrl: business.instagramUrl,
-        youtubeUrl: business.youtubeUrl,
-        whatsappNumber: business.whatsappNumber,
-        website,
-        autoReplyEnabled: business.autoReplyEnabled,
-        keywords: business.keywords,
+        description: business.overview || null,
+        website: website || null,
+        email: business.email || null,
+        phone: business.phone || null,
+        category: business.category || null,
+        business_category: business.category || null,
+        google_review_url: business.googleBusinessReviewLink || null,
+        instagram_url: business.instagramUrl || null,
+        youtube_url: business.youtubeUrl || null,
+        whatsapp_url: getWhatsAppLinkWithMessage(business.whatsappNumber || "") || null,
+        business_id: businessSlug,
+        tags: business.keywords || [],
+        services: business.services && business.services.length > 0 ? business.services : [],
       };
-      updateBusinessEditOverrides(business.id, overrides);
+
+      if (business.address) {
+        const pincode = business.pincode || "";
+        payload.address = {
+          address_line1: business.address,
+          address_line2: null,
+          city: business.city || "",
+          area: business.area || "",
+          pincode,
+          postal_code: pincode,
+        };
+      }
+
+      const authToken = getAuthToken();
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+      if (authToken) {
+        headers["Authorization"] = `Bearer ${authToken}`;
+      }
+
+      const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/configure_qr`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to save business QR configuration");
+      }
+
       if (!isAutosave) {
         setToastMessage(`${section} saved successfully!`);
         setShowToast(true);
@@ -1304,6 +1127,84 @@ export default function BusinessDetailPage() {
       updateLastSaved("Business links");
       updateLastSaved("Auto-reply settings");
       updateLastSaved("Keywords");
+
+      if (section === "Business information" || isAutosave) {
+        updateBusinessEditOverrides(businessSlug, {
+          name: business.name,
+          category: business.category,
+          email: business.email,
+          phone: business.phone,
+          address: business.address,
+          city: business.city,
+          area: business.area,
+          pincode: business.pincode,
+          overview: business.overview,
+          services: business.services,
+        });
+      }
+      if (section === "Business links" || isAutosave) {
+        updateBusinessEditOverrides(businessSlug, {
+          googleBusinessReviewLink: business.googleBusinessReviewLink,
+          googlePlaceId: business.googlePlaceId,
+          instagramUrl: business.instagramUrl,
+          youtubeUrl: business.youtubeUrl,
+          whatsappNumber: business.whatsappNumber,
+          website,
+        });
+      }
+
+      // Refetch to get latest from server
+      try {
+        const refetchRes = await fetch(`/api/business/${encodeURIComponent(businessSlug)}`);
+        if (refetchRes.ok) {
+          const refetchJson = await refetchRes.json();
+          const d = refetchJson.data;
+          if (d) {
+            setBusiness((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    name: d.business_name ?? prev.name,
+                    email: d.business_contact?.email ?? prev.email,
+                    phone: d.business_contact?.phone ?? prev.phone,
+                    address: d.business_address?.address_line1 ?? prev.address,
+                    city: d.business_address?.city ?? prev.city,
+                    area: d.business_address?.area ?? prev.area,
+                    pincode:
+                      d.business_address?.pincode ??
+                      d.business_address?.postal_code ??
+                      prev.pincode,
+                    overview: d.business_description ?? prev.overview,
+                    googleBusinessReviewLink:
+                      d.business_google_review_url ??
+                      prev.googleBusinessReviewLink,
+                    instagramUrl: d.instagram_url ?? prev.instagramUrl,
+                    youtubeUrl: d.youtube_url ?? prev.youtubeUrl,
+                    whatsappNumber: parseWhatsAppNumberFromUrl(d.whatsapp_url ?? "") ?? prev.whatsappNumber,
+                    whatsappUrl: d.whatsapp_url ?? prev.whatsappUrl,
+                    keywords: Array.isArray(d.business_tags)
+                      ? d.business_tags
+                      : prev.keywords,
+                    category:
+                      (d.business_category as BusinessCategory) || prev.category,
+                    services:
+                      Array.isArray(d.services) && d.services.length > 0
+                        ? d.services
+                        : prev.services,
+                  }
+                : null
+            );
+            if (d.business_website !== undefined)
+              setWebsite(d.business_website || "");
+          }
+        }
+      } catch {
+        // Ignore refetch errors
+      }
+    } catch (error) {
+      console.error("Error saving business QR configuration:", error);
+      setToastMessage(error instanceof Error ? error.message : "Failed to save changes");
+      setShowToast(true);
     }
   };
 
@@ -1411,10 +1312,7 @@ export default function BusinessDetailPage() {
           <CardContent className="flex flex-col gap-3">
             {loadError && (
               <Button
-                onClick={() => {
-                  setLoadError(null);
-                  setLoadRetryKey((k) => k + 1);
-                }}
+                onClick={() => retryLoad()}
                 className="w-full"
               >
                 Try Again
@@ -2719,6 +2617,8 @@ export default function BusinessDetailPage() {
             {business && (
               <GBPHealthTab
                 businessName={business.name}
+                businessId={business?.id ?? businessSlug}
+                placeId={business?.googlePlaceId}
               />
             )}
           </TabsContent>
@@ -2726,7 +2626,10 @@ export default function BusinessDetailPage() {
           {/* Recommended Actions Tab */}
           <TabsContent value="recommended-actions" className="space-y-6 mt-0">
             {business && (
-              <RecommendedActionsTab businessName={business.name} />
+              <RecommendedActionsTab
+                businessName={business.name}
+                placeId={business?.googlePlaceId}
+              />
             )}
           </TabsContent>
 
@@ -2734,7 +2637,7 @@ export default function BusinessDetailPage() {
           <TabsContent value="reviews" className="space-y-6 mt-0">
             <ReviewsTab
               business={business}
-              manualReviews={isQRId ? apiReviews : (business ? getReviewsByBusinessId(business.id) : [])}
+              manualReviews={apiReviews}
               isLoadingManual={isLoadingReviews}
               placeId={business?.googlePlaceId}
             />

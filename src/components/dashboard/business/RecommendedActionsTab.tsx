@@ -3,9 +3,8 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { calculateGBPScore } from "@/components/sales-dashboard";
-import type { GBPAnalysisData } from "@/components/sales-dashboard/types";
-import type { ActionItem } from "@/components/sales-dashboard/types";
+import { useGBPAnalysis } from "@/hooks/useGBPAnalysis";
+import type { ActionItem, PlaceDetailsData } from "@/components/sales-dashboard/types";
 import {
   Loader2,
   CheckCircle2,
@@ -59,46 +58,31 @@ function PriorityPill({ priority }: { priority: ActionItem["priority"] }) {
 
 export interface RecommendedActionsTabProps {
   businessName: string;
+  /** Optional place_id; backend fetches details when provided (business dashboard flow) */
+  placeId?: string | null;
+  /** Optional pre-fetched place details (sales dashboard flow) */
+  placeDetails?: PlaceDetailsData | null;
 }
 
-export function RecommendedActionsTab({ businessName }: RecommendedActionsTabProps) {
-  const [gbpAnalysisData, setGbpAnalysisData] = useState<GBPAnalysisData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export function RecommendedActionsTab({
+  businessName,
+  placeId = null,
+  placeDetails = null,
+}: RecommendedActionsTabProps) {
+  const { data, loading, error } = useGBPAnalysis({
+    businessName,
+    placeId,
+    placeDetails,
+    enabled: !!businessName?.trim(),
+  });
+  const gbpAnalysisData = data?.analysisData ?? null;
+
   const [doneIds, setDoneIds] = useState<Set<string>>(() => new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
 
   useEffect(() => {
     setDoneIds(getStoredDoneIds(businessName));
-  }, [businessName]);
-
-  useEffect(() => {
-    if (!businessName?.trim()) {
-      setLoading(false);
-      setError("Business name is required");
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    calculateGBPScore(businessName, null)
-      .then((result) => {
-        if (!cancelled) {
-          setGbpAnalysisData(result.analysisData);
-          setError(null);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load actions");
-          setGbpAnalysisData(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => { cancelled = true; };
   }, [businessName]);
 
   const toggleDone = (id: string) => {

@@ -31,9 +31,7 @@ function ReviewPageContent() {
       }
 
       try {
-        // First, check QR configuration via API
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
-        const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/scan?qr_id=${qrId}`);
+        const response = await fetch(`/api/business/${encodeURIComponent(qrId)}`);
 
         if (!response.ok) {
           console.error("Failed to fetch QR configuration");

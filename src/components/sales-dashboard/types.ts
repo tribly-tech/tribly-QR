@@ -169,6 +169,27 @@ export interface GBPAnalysisReportResponse {
   insights: GBPInsight[];
 }
 
+/** Place details from Google Places / locations API (for GBP analysis input) */
+export interface PlaceDetailsData {
+  place_id?: string;
+  name?: string;
+  formatted_address?: string;
+  formatted_phone_number?: string;
+  international_phone_number?: string;
+  website?: string;
+  address_components?: Array<{
+    long_name: string;
+    short_name: string;
+    types: string[];
+  }>;
+  location?: { lat: number; lng: number };
+  geometry?: { location: { lat: number; lng: number } };
+  types?: string[];
+  business_status?: string;
+  rating?: number;
+  user_ratings_total?: number;
+}
+
 /** Result of "top 3 within radius" check for local competitiveness */
 export interface Top3InRadiusResult {
   inTop3: boolean;

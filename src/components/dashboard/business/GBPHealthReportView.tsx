@@ -547,7 +547,7 @@ export function GBPHealthReportView({
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
+                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none text-center">
                   {formatDiscoveryValue(discoveryAndActions?.discovery?.searchQueries)}
                 </div>
               </CardContent>
@@ -565,7 +565,7 @@ export function GBPHealthReportView({
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
+                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none text-center">
                   {formatDiscoveryValue(discoveryAndActions?.discovery?.searchViews)}
                 </div>
               </CardContent>
@@ -583,7 +583,7 @@ export function GBPHealthReportView({
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
+                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none text-center">
                   {formatDiscoveryValue(discoveryAndActions?.discovery?.mapViews)}
                 </div>
               </CardContent>
@@ -602,7 +602,7 @@ export function GBPHealthReportView({
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
+                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none text-center">
                   {formatDiscoveryValue(discoveryAndActions?.customerActions?.websiteClicks)}
                 </div>
               </CardContent>
@@ -620,7 +620,7 @@ export function GBPHealthReportView({
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
+                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none text-center">
                   {formatDiscoveryValue(discoveryAndActions?.customerActions?.directionRequests)}
                 </div>
               </CardContent>
@@ -638,7 +638,7 @@ export function GBPHealthReportView({
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none">
+                <div className="text-2xl sm:text-3xl lg:text-[32px] font-medium text-gray-900 leading-none text-center">
                   {formatDiscoveryValue(discoveryAndActions?.customerActions?.phoneCalls)}
                 </div>
               </CardContent>
