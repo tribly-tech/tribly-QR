@@ -1081,6 +1081,9 @@ This secure link will allow Tribly to help improve your online presence.`;
                           onClick={() => {
                             stopPolling();
                             setAuthSessionId(null);
+                            if (typeof window !== "undefined") {
+                              sessionStorage.removeItem("gbp_completed_session_id");
+                            }
                           }}
                           variant="ghost"
                           className="flex-1 text-muted-foreground"
