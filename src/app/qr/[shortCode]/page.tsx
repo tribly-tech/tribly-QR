@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * QR Lookup Page (public scan flow)
+ *
+ * IMPORTANT: This route is unprotected. Never redirect to login.
+ * - API success → redirect to /review?qr=business_id
+ * - API failure → show error page (never login)
+ */
+
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { AlertCircle, Loader2, QrCode } from "lucide-react";
