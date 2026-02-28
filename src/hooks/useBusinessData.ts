@@ -42,7 +42,13 @@ function mapApiToBusiness(qrId: string, qrData: any): Business {
     keywords: Array.isArray(qrData.business_tags) ? qrData.business_tags : [],
     services: Array.isArray(qrData.business_services) ? qrData.business_services : [],
     feedbackTone: "professional",
-    autoReplyEnabled: false,
+    autoReplyEnabled: qrData.auto_reply_config?.auto_reply_enabled ?? false,
+    autoReplyTemplates: {
+      excellent: qrData.auto_reply_config?.templates?.excellent ?? "",
+      good: qrData.auto_reply_config?.templates?.good ?? "",
+      average: qrData.auto_reply_config?.templates?.average ?? "",
+      needImprovement: qrData.auto_reply_config?.templates?.need_improvement ?? "",
+    },
     paymentPlan:
       qrData.plan === "qr-plus" || qrData.plan === "qr-basic"
         ? qrData.plan

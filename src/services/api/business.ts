@@ -40,7 +40,9 @@ export async function fetchBusinessByQrId(
 
 export async function fetchBusinessManualReviews(
   qrId: string,
-  authHeader: string | null
+  authHeader: string | null,
+  page = 1,
+  pageSize = 20
 ): Promise<ApiResult> {
   if (!qrId) {
     return { ok: false, status: 400, error: { message: "qr_id is required" } };
@@ -48,7 +50,7 @@ export async function fetchBusinessManualReviews(
 
   try {
     const response = await fetch(
-      `${getTriblyBaseUrl()}/dashboard/v1/business_qr/manual_reviews?qr_id=${encodeURIComponent(qrId)}`,
+      `${getTriblyBaseUrl()}/dashboard/v1/business_qr/manual_reviews?qr_id=${encodeURIComponent(qrId)}&page=${page}&page_size=${pageSize}`,
       { headers: buildHeaders(authHeader) }
     );
 

@@ -12,6 +12,7 @@ function ReviewPageContent() {
   const code = searchParams.get("code");
   const qrId = searchParams.get("qr");
   const [isChecking, setIsChecking] = useState(false);
+  const [googleReviewUrl, setGoogleReviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const checkQRConfiguration = async () => {
@@ -48,6 +49,10 @@ function ReviewPageContent() {
           return;
         }
 
+        // Store Google review URL for positive rating redirect
+        const reviewUrl = data?.data?.business_google_review_url || null;
+        setGoogleReviewUrl(reviewUrl);
+
         // If configured, show the review page (no auth check needed)
         setIsChecking(false);
       } catch (error) {
@@ -60,13 +65,15 @@ function ReviewPageContent() {
   }, [qrId, router]);
 
   const handleRatingClick = (rating: "excellent" | "good" | "average" | "need-improvement") => {
-    if (rating === "excellent" || rating === "good" || rating === "average") {
+    if ((rating === "excellent" || rating === "good") && googleReviewUrl) {
+      // High ratings → redirect to Google review page
+      window.location.href = googleReviewUrl;
+    } else if (rating === "excellent" || rating === "good" || rating === "average") {
       const params = new URLSearchParams();
       params.set("rating", rating);
       if (code) params.set("code", code);
       if (qrId) params.set("qr", qrId);
-      const feedbackUrl = `/feedback?${params.toString()}`;
-      router.push(feedbackUrl);
+      router.push(`/feedback?${params.toString()}`);
     } else {
       const params = new URLSearchParams();
       if (code) params.set("code", code);

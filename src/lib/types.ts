@@ -57,6 +57,12 @@ export interface Business {
   // Settings
   feedbackTone: FeedbackTone;
   autoReplyEnabled: boolean;
+  autoReplyTemplates?: {
+    excellent?: string;
+    good?: string;
+    average?: string;
+    needImprovement?: string;
+  };
   // Payment
   paymentPlan?: "qr-basic" | "qr-plus";
   paymentStatus?: "active" | "past-due" | "cancelled";
