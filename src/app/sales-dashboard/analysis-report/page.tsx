@@ -225,6 +225,7 @@ function AnalysisReportContent() {
           {
             method: "GET",
             headers,
+            cache: "no-store", // Prevent cached responses - critical for polling
           }
         );
 
@@ -233,7 +234,8 @@ function AnalysisReportContent() {
         }
 
         const data = await response.json();
-        const status = data.data?.status || data.status;
+        const rawStatus = data.data?.status ?? data.status ?? data.session?.status;
+        const status = typeof rawStatus === "string" ? rawStatus.toLowerCase().trim() : rawStatus;
 
         setPollCount((prev) => prev + 1);
 
@@ -292,10 +294,10 @@ function AnalysisReportContent() {
       setPollCount(0);
       setAuthError(null);
 
-      // Poll every 15 seconds
+      // Poll every 10 seconds
       pollingIntervalRef.current = setInterval(() => {
         checkSessionStatus(sessionId);
-      }, 15000);
+      }, 10000);
 
       // Stop polling after 30 minutes (session expires)
       pollingTimeoutRef.current = setTimeout(() => {
@@ -318,6 +320,27 @@ function AnalysisReportContent() {
       stopPolling();
     };
   }, [stopPolling]);
+
+  // Resume polling on page load when user returns with an active session
+  useEffect(() => {
+    if (!gbpAnalysisData || isPolling || gbpConnected || isCreatingSession) return;
+
+    const storedSessionId =
+      typeof window !== "undefined"
+        ? sessionStorage.getItem("gbp_completed_session_id")
+        : null;
+    if (!storedSessionId) return;
+
+    const placeId = placeDetails?.place_id;
+    const connectedKey = `gbp_connected_${placeId || businessName}`;
+    if (typeof window !== "undefined" && sessionStorage.getItem(connectedKey) === "true") {
+      setGbpConnected(true);
+      return;
+    }
+
+    setAuthSessionId(storedSessionId);
+    startPolling(storedSessionId);
+  }, [gbpAnalysisData, placeDetails?.place_id, businessName, isPolling, gbpConnected, isCreatingSession, startPolling]);
 
   // Handle Connect with GBP - Creates auth session and opens WhatsApp
   const handleConnectWithGBP = async () => {
@@ -1058,6 +1081,9 @@ This secure link will allow Tribly to help improve your online presence.`;
                           onClick={() => {
                             stopPolling();
                             setAuthSessionId(null);
+                            if (typeof window !== "undefined") {
+                              sessionStorage.removeItem("gbp_completed_session_id");
+                            }
                           }}
                           variant="ghost"
                           className="flex-1 text-muted-foreground"

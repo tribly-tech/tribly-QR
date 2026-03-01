@@ -162,6 +162,7 @@ export async function getGbpAuthSessionStatus(
       {
         method: "GET",
         headers: buildHeaders(authHeader),
+        cache: "no-store", // Prevent cached responses - critical for polling
       }
     );
 

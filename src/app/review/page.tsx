@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * Review Page (public scan flow — reached via /qr/[shortCode] redirect)
+ *
+ * IMPORTANT: Never redirect to login. Customers scanning QR codes are not logged in.
+ * - API success → show review/rating UI
+ * - API failure → show error page (never login)
+ * Exception: logged-in sales-team users are redirected to /sales-dashboard?qr=...
+ */
+
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +22,7 @@ function ReviewPageContent() {
   const qrId = searchParams.get("qr");
   const [isChecking, setIsChecking] = useState(false);
   const [googleReviewUrl, setGoogleReviewUrl] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState(false);
 
   useEffect(() => {
     const checkQRConfiguration = async () => {
@@ -37,6 +47,7 @@ function ReviewPageContent() {
         if (!response.ok) {
           console.error("Failed to fetch QR configuration");
           setIsChecking(false);
+          setFetchError(true);
           return;
         }
 
@@ -54,10 +65,12 @@ function ReviewPageContent() {
         setGoogleReviewUrl(reviewUrl);
 
         // If configured, show the review page (no auth check needed)
+        // API success — show the review page (backend fails if business not configured)
         setIsChecking(false);
       } catch (error) {
         console.error("Error checking QR configuration:", error);
         setIsChecking(false);
+        setFetchError(true);
       }
     };
 
@@ -119,6 +132,31 @@ function ReviewPageContent() {
       <main className="h-screen sm:min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex flex-col items-center justify-center p-4 sm:p-6 overflow-hidden">
         <div className="text-center">
           <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </main>
+    );
+  }
+
+  // API failed (e.g. business not configured — backend returns error in that case)
+  if (fetchError) {
+    return (
+      <main className="h-screen sm:min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex flex-col items-center justify-center p-4 sm:p-6 overflow-hidden">
+        <div className="w-full max-w-md space-y-6 text-center">
+          <div className="space-y-2">
+            <h1 className="text-2xl sm:text-3xl font-semibold text-foreground">
+              Unable to load
+            </h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
+              This QR code is invalid or not set up yet. Please try again later.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => router.push("/")}
+            className="text-[#9747FF] border-[#9747FF]/30 hover:bg-[#9747FF]/10"
+          >
+            Back to Home
+          </Button>
         </div>
       </main>
     );
