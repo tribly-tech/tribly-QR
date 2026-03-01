@@ -110,8 +110,6 @@ export default function BusinessDetailPage() {
     qrCodeError,
     setQrCodeError,
     currentUser,
-    apiReviews,
-    isLoadingReviews,
     reviewError,
     retry: retryLoad,
   } = useBusinessData(businessSlug);
@@ -121,7 +119,6 @@ export default function BusinessDetailPage() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [newKeyword, setNewKeyword] = useState("");
-  const [suggestionsLimit, setSuggestionsLimit] = useState(12);
   const [isBusinessOwner, setIsBusinessOwner] = useState(false);
 
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
@@ -154,7 +151,7 @@ export default function BusinessDetailPage() {
   const lastSavedRef = useRef<{
     businessInfo: Record<string, unknown> | null;
     links: Record<string, string> | null;
-    autoReply: { autoReplyEnabled: boolean } | null;
+    autoReply: { autoReplyEnabled: boolean; templates: NonNullable<Business["autoReplyTemplates"]> } | null;
     keywords: string[] | null;
   }>({ businessInfo: null, links: null, autoReply: null, keywords: null });
 
@@ -386,16 +383,12 @@ export default function BusinessDetailPage() {
           whatsappNumber: business.whatsappNumber || "",
           website,
         },
-        autoReply: { autoReplyEnabled: business.autoReplyEnabled },
+        autoReply: { autoReplyEnabled: business.autoReplyEnabled, templates: business.autoReplyTemplates ?? {} },
         keywords: [...(business.keywords || [])].sort(),
       };
     }
   }, [business?.id, isLoading]); // Only init on load; website from closure is correct on first run
 
-  // Reset suggestions limit when business or keywords change
-  useEffect(() => {
-    setSuggestionsLimit(12);
-  }, [business?.id, business?.keywords]);
 
   // Payment timer countdown
   useEffect(() => {
@@ -779,10 +772,6 @@ export default function BusinessDetailPage() {
     return deduped;
   }, [business, aiKeywordSuggestions]);
 
-  // Display limited suggestions based on suggestionsLimit
-  const displayedSuggestions = useMemo(() => {
-    return suggestedKeywords.slice(0, suggestionsLimit);
-  }, [suggestedKeywords, suggestionsLimit]);
 
   // Change detection for disabling Save buttons
   const hasBusinessInfoChanges = useMemo(() => {
@@ -819,7 +808,15 @@ export default function BusinessDetailPage() {
 
   const hasAutoReplyChanges = useMemo(() => {
     if (!business || !lastSavedRef.current.autoReply) return false;
-    return lastSavedRef.current.autoReply.autoReplyEnabled !== business.autoReplyEnabled;
+    const saved = lastSavedRef.current.autoReply;
+    const t = business.autoReplyTemplates ?? {};
+    return (
+      saved.autoReplyEnabled !== business.autoReplyEnabled ||
+      saved.templates.excellent !== t.excellent ||
+      saved.templates.good !== t.good ||
+      saved.templates.average !== t.average ||
+      saved.templates.needImprovement !== t.needImprovement
+    );
   }, [business]);
 
   const hasKeywordsChanges = useMemo(() => {
@@ -905,7 +902,7 @@ export default function BusinessDetailPage() {
         website,
       };
     } else if (section === "Auto-reply settings") {
-      r.autoReply = { autoReplyEnabled: business.autoReplyEnabled };
+      r.autoReply = { autoReplyEnabled: business.autoReplyEnabled, templates: business.autoReplyTemplates ?? {} };
     } else if (section === "Keywords") {
       r.keywords = [...(business.keywords || [])].sort();
     }
@@ -964,6 +961,25 @@ export default function BusinessDetailPage() {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || "Failed to save business QR configuration");
+      }
+
+      // Save auto-reply config separately when saving that section
+      if (section === "Auto-reply settings" || isAutosave) {
+        const t = business.autoReplyTemplates ?? {};
+        await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/auto_reply_config`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            qr_id: businessSlug,
+            auto_reply_enabled: business.autoReplyEnabled,
+            templates: {
+              excellent: t.excellent ?? null,
+              good: t.good ?? null,
+              average: t.average ?? null,
+              need_improvement: t.needImprovement ?? null,
+            },
+          }),
+        });
       }
 
       if (!isAutosave) {
@@ -1601,7 +1617,7 @@ export default function BusinessDetailPage() {
                               keywords: [],
                             });
                             setBusinessServiceInput("");
-                            setSuggestionsLimit(12);
+
                             setNewKeyword("");
                             setShowBusinessServiceSuggestions(false);
                           }}
@@ -1649,7 +1665,7 @@ export default function BusinessDetailPage() {
                                       keywords: [],
                                     });
                                     setBusinessServiceInput("");
-                                    setSuggestionsLimit(12);
+        
                                     setNewKeyword("");
                                     setShowBusinessServiceSuggestions(false);
                                   }}
@@ -2057,9 +2073,6 @@ export default function BusinessDetailPage() {
                   handleRemoveKeyword={handleRemoveKeyword}
                   handleUpdateBusiness={handleUpdateBusiness}
                   suggestedKeywords={suggestedKeywords}
-                  suggestionsLimit={suggestionsLimit}
-                  setSuggestionsLimit={setSuggestionsLimit}
-                  displayedSuggestions={displayedSuggestions}
                   onAISuggest={handleAISuggestKeywords}
                   isLoadingAISuggestions={isLoadingAIKeywords}
                 />
@@ -2390,9 +2403,11 @@ export default function BusinessDetailPage() {
                         <Textarea
                           placeholder="Thank you for your excellent feedback! We're thrilled to hear about your positive experience..."
                           className="min-h-[100px]"
+                          value={business.autoReplyTemplates?.excellent ?? ""}
+                          onChange={(e) => handleUpdateBusiness({ autoReplyTemplates: { ...business.autoReplyTemplates, excellent: e.target.value } })}
                         />
                         <p className="text-xs text-muted-foreground">
-                          This message will be sent when customers rate their experience as "Excellent"
+                          Sent as a Google review reply when customers rate as &quot;Excellent&quot;
                         </p>
                       </div>
                       <div className="space-y-2">
@@ -2400,9 +2415,11 @@ export default function BusinessDetailPage() {
                         <Textarea
                           placeholder="Thank you for your feedback! We appreciate you taking the time to share your experience..."
                           className="min-h-[100px]"
+                          value={business.autoReplyTemplates?.good ?? ""}
+                          onChange={(e) => handleUpdateBusiness({ autoReplyTemplates: { ...business.autoReplyTemplates, good: e.target.value } })}
                         />
                         <p className="text-xs text-muted-foreground">
-                          This message will be sent when customers rate their experience as "Good"
+                          Sent as a Google review reply when customers rate as &quot;Good&quot;
                         </p>
                       </div>
                       <div className="space-y-2">
@@ -2410,9 +2427,11 @@ export default function BusinessDetailPage() {
                         <Textarea
                           placeholder="Thank you for your feedback. We value your input and are always working to improve our service..."
                           className="min-h-[100px]"
+                          value={business.autoReplyTemplates?.average ?? ""}
+                          onChange={(e) => handleUpdateBusiness({ autoReplyTemplates: { ...business.autoReplyTemplates, average: e.target.value } })}
                         />
                         <p className="text-xs text-muted-foreground">
-                          This message will be sent when customers rate their experience as "Average"
+                          Sent as a Google review reply when customers rate as &quot;Average&quot;
                         </p>
                       </div>
                       <div className="space-y-2">
@@ -2420,9 +2439,11 @@ export default function BusinessDetailPage() {
                         <Textarea
                           placeholder="We're sorry to hear about your experience. We'd like to make things right. Please contact us at..."
                           className="min-h-[100px]"
+                          value={business.autoReplyTemplates?.needImprovement ?? ""}
+                          onChange={(e) => handleUpdateBusiness({ autoReplyTemplates: { ...business.autoReplyTemplates, needImprovement: e.target.value } })}
                         />
                         <p className="text-xs text-muted-foreground">
-                          This message will be sent when customers rate their experience as "Need Improvement"
+                          Sent as a Google review reply when customers rate as &quot;Need Improvement&quot;
                         </p>
                       </div>
                     </div>
@@ -2484,8 +2505,6 @@ export default function BusinessDetailPage() {
           <TabsContent value="reviews" className="space-y-6 mt-0">
             <ReviewsTab
               business={business}
-              manualReviews={apiReviews}
-              isLoadingManual={isLoadingReviews}
               placeId={business?.googlePlaceId}
             />
           </TabsContent>

@@ -21,6 +21,7 @@ function ReviewPageContent() {
   const code = searchParams.get("code");
   const qrId = searchParams.get("qr");
   const [isChecking, setIsChecking] = useState(false);
+  const [googleReviewUrl, setGoogleReviewUrl] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState(false);
 
   useEffect(() => {
@@ -50,6 +51,20 @@ function ReviewPageContent() {
           return;
         }
 
+        const data = await response.json();
+
+        // If not configured, redirect to login page with QR ID
+        if (!data?.data?.is_configured) {
+          // Pass the QR ID so login page can redirect appropriately based on user type
+          router.push(`/login?qr=${qrId}`);
+          return;
+        }
+
+        // Store Google review URL for positive rating redirect
+        const reviewUrl = data?.data?.business_google_review_url || null;
+        setGoogleReviewUrl(reviewUrl);
+
+        // If configured, show the review page (no auth check needed)
         // API success — show the review page (backend fails if business not configured)
         setIsChecking(false);
       } catch (error) {
@@ -63,13 +78,15 @@ function ReviewPageContent() {
   }, [qrId, router]);
 
   const handleRatingClick = (rating: "excellent" | "good" | "average" | "need-improvement") => {
-    if (rating === "excellent" || rating === "good" || rating === "average") {
+    if ((rating === "excellent" || rating === "good") && googleReviewUrl) {
+      // High ratings → redirect to Google review page
+      window.location.href = googleReviewUrl;
+    } else if (rating === "excellent" || rating === "good" || rating === "average") {
       const params = new URLSearchParams();
       params.set("rating", rating);
       if (code) params.set("code", code);
       if (qrId) params.set("qr", qrId);
-      const feedbackUrl = `/feedback?${params.toString()}`;
-      router.push(feedbackUrl);
+      router.push(`/feedback?${params.toString()}`);
     } else {
       const params = new URLSearchParams();
       if (code) params.set("code", code);
